@@ -35,6 +35,11 @@
   #catch .sub { margin-top:4px; font-size:14px; opacity:.9; }
   #catch kbd { padding:2px 9px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:7px; font-family:inherit; }
   #catch.on { opacity:1; animation:pulse .7s ease-in-out infinite; }
+  #ridePrompt { position:absolute; left:50%; bottom:28%; transform:translateX(-50%); text-align:center; opacity:0; transition:opacity .15s; }
+  #ridePrompt .big { font-size:24px; font-weight:900; letter-spacing:2px; color:#ffd9a0; text-shadow:0 0 18px rgba(255,217,160,.85),0 2px 10px rgba(0,0,0,.6); }
+  #ridePrompt .sub { margin-top:3px; font-size:13px; opacity:.92; }
+  #ridePrompt kbd { padding:2px 9px; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35); border-radius:7px; font-family:inherit; }
+  #ridePrompt.on { opacity:1; animation:pulse .8s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{transform:translateX(-50%) scale(1)} 50%{transform:translateX(-50%) scale(1.07)} }
 
   #help { bottom:16px; left:16px; font-size:12px; line-height:1.9; opacity:.85; max-width:52vw; }
@@ -112,12 +117,37 @@
   #go:hover { transform:translateY(-2px) scale(1.03); box-shadow:0 14px 44px rgba(30,200,200,.5); }
   #err { position:fixed; inset:0; z-index:30; display:none; align-items:center; justify-content:center;
          background:#0a2740; text-align:center; padding:30px; font-size:15px; line-height:1.6; }
+  #nycBtn {
+    position: fixed;
+    top: 16px;
+    left: 230px;
+    pointer-events: auto;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: linear-gradient(135deg, rgba(255, 99, 132, 0.45), rgba(255, 159, 64, 0.3));
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    border-radius: 12px;
+    padding: 8px 16px;
+    z-index: 100;
+    box-shadow: 0 4px 15px rgba(255, 99, 132, 0.2);
+    transition: transform 0.1s, background 0.2s;
+    font-family: inherit;
+  }
+  #nycBtn:hover {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, rgba(255, 99, 132, 0.6), rgba(255, 159, 64, 0.45));
+    box-shadow: 0 6px 20px rgba(255, 99, 132, 0.35);
+  }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 
 <div id="hud">
+  <button id="nycBtn">CONEY ISLAND (NYC)</button>
   <div id="stats" class="panel">
     <div id="speedBig">0<small> mph</small></div>
     <div class="row"><span>Mode</span><b><span id="stateTag">PADDLE</span></b></div>
@@ -130,9 +160,10 @@
   <div id="combo"></div>
   <div id="barrel">IN THE BARREL<small id="tube"></small></div>
   <div id="catch"><div class="big">⬆ DROP IN</div><div class="sub">press <kbd>Space</kbd> to pop up</div></div>
+  <div id="ridePrompt"><div class="big" id="rideName">🎡 WONDER WHEEL</div><div class="sub" id="rideSub">press <kbd>G</kbd> to ride</div></div>
   <div id="help" class="panel">
     <div><kbd>W</kbd> paddle/pump · <kbd>A</kbd><kbd>D</kbd> carve/stall/spin · <kbd>Space</kbd> pop up · air (hold = grab) · <kbd>S</kbd> slow / kick out</div>
-    <div><kbd>J</kbd> jet ski · <kbd>B</kbd> next break · <kbd>T</kbd> auto-catch · <kbd>C</kbd> camera · <kbd>K</kbd> golden hour · <kbd>M</kbd> sound · <kbd>F</kbd> wire · <kbd>R</kbd> reset</div>
+    <div><kbd>J</kbd> jet ski · <kbd>G</kbd> walk / ride the rides · <kbd>B</kbd> next break · <kbd>T</kbd> auto-catch · <kbd>C</kbd> camera · <kbd>K</kbd> golden hour · <kbd>M</kbd> sound · <kbd>R</kbd> reset</div>
   </div>
   <div id="compass" class="panel"><canvas id="radar" width="150" height="150"></canvas>reef break: <b id="reefdir">→</b> <span id="reefdist"></span></div>
   <div id="lb" class="panel"><div class="hd" id="lbHead"></div><div id="lbRows"></div></div>
@@ -141,6 +172,7 @@
 <div id="touch">
   <div id="stick"><div id="knob"></div></div>
   <div id="tbtns">
+    <button class="tb" id="tbWalk">WALK</button>
     <button class="tb" id="tbBrk">BREAK</button>
     <button class="tb" id="tbJet">JET SKI</button>
     <button class="tb big" id="tbPop">POP</button>
@@ -156,7 +188,7 @@
       <div><b>The reef:</b> press <kbd>B</kbd> to head to the breaking wave — get tubed for big points</div>
       <div><b>In the barrel:</b> <kbd>A</kbd> stall deeper (drag a hand) · <kbd>D</kbd> race the section</div>
       <div><b>Airs:</b> <kbd>Space</kbd> off the lip · <kbd>A</kbd>/<kbd>D</kbd> spin · hold <kbd>Space</kbd> to grab · land straight!</div>
-      <div><b>Roam:</b> <kbd>J</kbd> jet ski between breaks · <kbd>K</kbd> golden hour · watch for dolphins</div>
+      <div><b>Roam:</b> <kbd>J</kbd> jet ski · <kbd>G</kbd> walk/mount board · <kbd>B</kbd> next break · look north to see Coney Island!</div>
     </div>
     <div class="mp"><input id="pname" maxlength="12" placeholder="YOUR NAME" autocomplete="off"><input id="proom" maxlength="12" placeholder="ROOM" autocomplete="off"></div>
     <div class="mphint">friends who enter the same room ride the same ocean — live leaderboard · crash into each other for points</div>
@@ -169,13 +201,14 @@
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script type="importmap">
 { "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
 } }
 </script>
 
 <script type="module">
 let THREE, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, OutputPass;
+import { createConeyIsland } from './coney.js';
 try {
   THREE = await import('three');
   ({EffectComposer} = await import('three/addons/postprocessing/EffectComposer.js'));
@@ -243,7 +276,8 @@ function setEnv(t){ const p=(t%SET_PERIOD)/SET_PERIOD; if(p>0.6) return 0; retur
 const _n=new THREE.Vector3();
 function sampleWater(x,z,t){
   let dy=0,nx=0,nz=0,ny=1;
-  const calm=0.32+0.68*smooth(45,210, Math.hypot(x-REEF.O.x, z-REEF.O.y));   // glassy near the break
+  let calm=0.32+0.68*smooth(45,210, Math.hypot(x-REEF.O.x, z-REEF.O.y));   // glassy near the break
+  calm *= 1-(1-smooth(-1380,-1240,z))*(1-smooth(1100,1300,Math.abs(x)));   // calm only in front of Coney
   for(let i=0;i<NW;i++){ const w=WAVES[i]; const amp=w.amp*(w.set?(0.10+0.90*curSetAmp):1.0)*calm; if(amp<1e-4) continue;
     const k=(2*Math.PI)/w.len; const f=k*(w.dir[0]*x+w.dir[1]*z)-t*w.spd; const C=Math.cos(f),Sn=Math.sin(f),WA=k*amp;
     dy+=amp*Sn; nx-=w.dir[0]*WA*C; nz-=w.dir[1]*WA*C; ny-=w.steep*WA*Sn; }
@@ -265,6 +299,7 @@ const REEFS=[
   makeReef( 480, 160, -0.35, 1.00, 200,  9,  8.0, 4.0,  1),
   makeReef(-560,-380,  0.85,-0.40, 300, 16, 11.4, 5.0, 17),
   makeReef( 360,-580,  0.50, 0.90, 240, 11,  9.5, 4.0, 15),
+  makeReef( 0,   -1380, -1.00,-0.05, 360, 14, 11.5, 4.5,  5), // Coney Island Break — peels toward the beach
 ];
 REEFS.forEach((R,i)=>R.id=i);
 let reefIdx=0; let REEF=REEFS[reefIdx];
@@ -395,25 +430,26 @@ const oceanMat=new THREE.ShaderMaterial({ fog:true,
   uniforms: THREE.UniformsUtils.merge([ THREE.UniformsLib.fog, {
     uTime:{value:0}, uOffset:{value:new THREE.Vector2()}, uCam:{value:new THREE.Vector3()}, uSetAmp:{value:0}, uCloudRef:{value:1},
     uDirAmp:{value:uDirAmp}, uLSS:{value:uLSS}, uReef:{value:new THREE.Vector2(REEF.O.x,REEF.O.y)},
-    uLumpP:{value:[new THREE.Vector4(),new THREE.Vector4(),new THREE.Vector4(),new THREE.Vector4()]},
+    uLumpP:{value:REEFS.map(()=>new THREE.Vector4())},
     uLumpD:{value:REEFS.map(R=>new THREE.Vector4(R.s.x,R.s.y,R.lineLen,0))},
     uIsle:{value:(()=>{ const a=ISLANDS.map(i=>new THREE.Vector4(i.x,i.z,i.r,0)); while(a.length<8) a.push(new THREE.Vector4(0,0,-1,0)); return a; })()},
   }]),
   vertexShader:`
     #define NW ${NW}
     uniform float uTime,uSetAmp; uniform vec2 uOffset,uReef; uniform vec4 uDirAmp[NW]; uniform vec3 uLSS[NW];
-    uniform vec4 uLumpP[4]; uniform vec4 uLumpD[4];
+    uniform vec4 uLumpP[5]; uniform vec4 uLumpD[5];
     varying vec3 vWorld; varying vec3 vNormal; varying float vFoam; varying float vCrest;
     #include <fog_pars_vertex>
     void main(){ vec2 g=vec2(position.x+uOffset.x, position.z+uOffset.y);
       float calm=mix(0.32,1.0, smoothstep(45.0,210.0, distance(g,uReef)));
+      calm *= 1.0-(1.0-smoothstep(-1380.0,-1240.0,g.y))*(1.0-smoothstep(1100.0,1300.0,abs(g.x)));
       vec3 disp=vec3(0.0); vec3 nrm=vec3(0.0,1.0,0.0); float fold=0.0; float crest=0.0;
       for(int i=0;i<NW;i++){ float setf=uDirAmp[i].w>0.5?(0.10+0.90*uSetAmp):1.0; float amp=uDirAmp[i].z*setf*calm;
         vec2 dir=uDirAmp[i].xy; float len=uLSS[i].x, spd=uLSS[i].y, steep=uLSS[i].z;
         float k=6.2831853/len; float f=k*dot(dir,g)-uTime*spd; float C=cos(f),S=sin(f),WA=k*amp;
         disp.x-=steep*amp*dir.x*C; disp.z-=steep*amp*dir.y*C; disp.y+=amp*S;
         nrm.x-=dir.x*WA*C; nrm.z-=dir.y*WA*C; nrm.y-=steep*WA*S; fold+=steep*WA*S; if(uDirAmp[i].w>0.5) crest+=max(S,0.0)*amp; }
-      for(int i=0;i<4;i++){ float lam=uLumpP[i].z; if(lam<0.02) continue;
+      for(int i=0;i<5;i++){ float lam=uLumpP[i].z; if(lam<0.02) continue;
         vec2 rel=g-uLumpP[i].xy; vec2 s2=uLumpD[i].xy; vec2 f2=vec2(-s2.y,s2.x);
         float al=dot(rel,s2), off=dot(rel,f2); float w2=uLumpP[i].w;
         float env=smoothstep(-30.0,40.0,al)*(1.0-smoothstep(uLumpD[i].z-40.0,uLumpD[i].z+20.0,al));
@@ -443,6 +479,13 @@ const oceanMat=new THREE.ShaderMaterial({ fog:true,
         shallow=max(shallow,smoothstep(r*3.4,r*1.18,dd)); sandy=max(sandy,smoothstep(r*1.5,r*1.16,dd));
         float rr=dd/r; float band=exp(-pow((rr-1.30)*7.0,2.0));
         washF=max(washF, band*(0.5+0.5*sin(rr*26.0-uTime*2.1))); }
+      /* Coney Island beach: turquoise shallows, sandy waterline, lapping foam */
+      float cGate=1.0-smoothstep(1080.0,1220.0,abs(vWorld.x));
+      float cShore=(1.0-smoothstep(-1508.0,-1420.0,vWorld.z))*cGate;
+      shallow=max(shallow,cShore*0.95);
+      sandy=max(sandy,(1.0-smoothstep(-1514.0,-1488.0,vWorld.z))*cGate);
+      float lap=exp(-pow((vWorld.z+1514.0-2.5*sin(vWorld.x*0.05+uTime*1.3))/7.0,2.0))*cGate;
+      washF=max(washF,lap*(0.55+0.45*sin(vWorld.x*0.11-uTime*2.2)));
       vec3 water=mix(uDeep,uShallow,shallow); water=mix(water,uSand,sandy*0.85);
       water*=0.92+0.16*smoothstep(-3.0,4.0,vWorld.y);
       vec3 R=reflect(-V,N); R.y=abs(R.y)+0.02;
@@ -850,6 +893,20 @@ function poseJet(r,bounce,steer){ r.zero(); r.hipsY=0.96;
   r.set('shL',-1.32,0.12,-0.14); r.set('elL',-0.30+bounce*0.2,0,0);
   r.set('shR',-1.32,-0.12,0.14); r.set('elR',-0.30+bounce*0.2,0,0);
 }
+function poseStand(r){ r.zero(); r.hipsY=1.34;
+  r.set('hips',0.02,0,0); r.set('spine',0.04,0,0); r.set('chest',0.03,0,0); r.set('head',0.02,0.06*Math.sin(waterTime*0.5),0);
+  r.set('shL',0.02,0,-0.14); r.set('elL',-0.18,0,0); r.set('shR',0.02,0,0.14); r.set('elR',-0.18,0,0);
+  r.set('hipL',-0.03,0,-0.04); r.set('kneeL',0.07,0,0); r.set('hipR',-0.03,0,0.04); r.set('kneeR',0.07,0,0);
+}
+function poseWalk(r,ph,sp){ r.zero(); const a=Math.sin(ph), b=-a;
+  r.hipsY=1.30+0.05*Math.abs(Math.cos(ph))*sp;
+  r.set('hips',0.08*sp,0,0.03*a*sp); r.set('spine',0.06*sp,0.07*a*sp,0); r.set('chest',0.05*sp,-0.11*a*sp,0);
+  r.set('head',0.04,0.05*a*sp,0);
+  r.set('shL',0.55*a*sp,0,-0.12); r.set('elL',-0.25-0.35*Math.max(0,a)*sp,0,0);
+  r.set('shR',0.55*b*sp,0,0.12);  r.set('elR',-0.25-0.35*Math.max(0,b)*sp,0,0);
+  r.set('hipL',-0.62*a*sp,0,-0.03); r.set('kneeL',0.10+0.95*Math.max(0,-a)*sp,0,0); r.set('ankL',0.18*a*sp,0,0);
+  r.set('hipR',-0.62*b*sp,0, 0.03); r.set('kneeR',0.10+0.95*Math.max(0,-b)*sp,0,0); r.set('ankR',0.18*b*sp,0,0);
+}
 
 /* ===================== SURFBOARD ===================== */
 function makeBoard(deckHex,stripeHex){
@@ -875,6 +932,31 @@ function makeBoard(deckHex,stripeHex){
 const player={};
 player.rig=makeRig({suit:0x16303e,accent:0x1ec8c8,skin:0xd29a6a,hair:0x2e2015});
 player.grp=new THREE.Group(); player.grp.add(player.rig.group); scene.add(player.grp);
+const coneyGroup = new THREE.Group();
+coneyGroup.position.set(0, 0, -1600);
+scene.add(coneyGroup);
+const coneyInstance = createConeyIsland(scene, camera, renderer);
+coneyInstance.build(coneyGroup, ()=>{ coneyStylePass(); window.__coneyReady=true; });
+/* Unify Coney with the game's look: convert PBR materials to the same Lambert response the
+   islands/characters use (also much faster to draw), and warm the NYC greys toward the palette */
+function coneyStylePass(){
+  const cache=new Map();
+  const RECOLOR={ 0xa8b1ba:0xa9bd8f, 0x8a8580:0x9b9184 };   // ground → warm green, plaza → warm concrete
+  const conv=(m)=>{
+    if(!m || !(m.isMeshStandardMaterial||m.isMeshPhysicalMaterial)) return m;
+    if(cache.has(m.uuid)) return cache.get(m.uuid);
+    const L=new THREE.MeshLambertMaterial();
+    if(m.color){ const hex=m.color.getHex(); L.color.setHex(RECOLOR[hex]??hex); }
+    L.map=m.map||null;
+    if(m.emissive) L.emissive.copy(m.emissive);
+    L.emissiveIntensity=m.emissiveIntensity??1;
+    L.transparent=m.transparent; L.opacity=m.opacity; L.side=m.side;
+    L.flatShading=m.flatShading===true; L.vertexColors=m.vertexColors===true;
+    cache.set(m.uuid,L); return L;
+  };
+  coneyGroup.traverse(o=>{ if(o.isMesh&&o.material){
+    o.material=Array.isArray(o.material)?o.material.map(conv):conv(o.material); } });
+}
 player.board=makeBoard(0xf2e3c2,0xff6a4d); scene.add(player.board);
 const boardSim={free:false,pos:new THREE.Vector3(),vel:new THREE.Vector3(),ph:0};
 function releaseBoard(){ if(boardSim.free) return; boardSim.free=true;
@@ -901,7 +983,8 @@ const leash=new THREE.Line(leashGeo,new THREE.LineBasicMaterial({color:0x10202c,
 leash.frustumCulled=false; leash.userData.noWire=true; scene.add(leash);
 const _lA=new THREE.Vector3(), _lB=new THREE.Vector3(), _lM=new THREE.Vector3();
 function updateLeash(){
-  if(S.mode==='jetski'){ leash.visible=false; return; } leash.visible=true;
+  if(S.mode==='jetski'||S.mode==='walk'){ leash.visible=false; return; }
+  leash.visible=true;
   _lA.copy(player.board.userData.tail); player.board.localToWorld(_lA);
   player.rig.J.ankR.getWorldPosition(_lB);
   _lM.lerpVectors(_lA,_lB,0.5); _lM.y-=0.42;
@@ -1014,7 +1097,7 @@ const ais=[ new AISurfer(1,{suit:0x7a2f4a,accent:0xffb066,skin:0xc98a5a,hair:0x1
 const MP={ id:Math.random().toString(36).slice(2,8), name:'', room:'', peers:new Map(),
   mqtt:null, bc:null, net:false, lastPub:0, cool:new Map(), looks:0 };
 const sanitizeName=s=>(s||'').toUpperCase().replace(/[^A-Z0-9 _\-]/g,'').trim().slice(0,10);
-const mpTopic=()=>'surferscode/r1/'+MP.room;
+const mpTopic=()=>'surferscode/r1/'+MP.room+'_coney';
 function mpJoin(name,room){
   MP.name=sanitizeName(name)||'RIDER'; MP.room=sanitizeName(room).replace(/ /g,'')||'LINEUP';
   try{ MP.bc=new BroadcastChannel('surf-'+MP.room); MP.bc.onmessage=e=>mpRecv(e.data); }catch(e){}
@@ -1035,7 +1118,7 @@ function mpJoin(name,room){
 }
 function mpSend(){ if(!MP.name) return;
   const o={i:MP.id,n:MP.name,x:+S.pos.x.toFixed(1),z:+S.pos.z.toFixed(1),y:+S.y.toFixed(2),
-    h:+S.heading.toFixed(2),m:S.mode==='jetski'?1:0,s:S.state,sc:Math.floor(score)};
+    h:+S.heading.toFixed(2),m:S.mode==='jetski'?1:(S.mode==='walk'?2:(S.mode==='attraction'?3:0)),s:S.state,sc:Math.floor(score)};
   try{ MP.bc&&MP.bc.postMessage(o); }catch(e){}
   if(MP.mqtt&&MP.net){ try{ MP.mqtt.publish(mpTopic(),JSON.stringify(o)); }catch(e){} }
 }
@@ -1073,11 +1156,15 @@ function updatePeers(dt){ const now=performance.now();
     p.x+=(p.tx-p.x)*k; p.z+=(p.tz-p.z)*k; p.y+=(p.ty-p.y)*k;
     if(dt>1e-4){ p.vx=p.vx*0.8+((p.x-x0)/dt)*0.2; p.vz=p.vz*0.8+((p.z-z0)/dt)*0.2; }
     p.h+=Math.atan2(Math.sin(p.th-p.h),Math.cos(p.th-p.h))*k;
-    const jet=p.mode===1;
-    p.grp.position.set(p.x,p.y+0.16,p.z); p.grp.rotation.set(0,p.h,0);
-    p.ski.visible=jet; p.board.visible=!jet;
+    const jet=p.mode===1, afoot=p.mode===2, onride=p.mode===3;
+    p.grp.position.set(p.x,p.y+((afoot||onride)?0:0.16),p.z); p.grp.rotation.set(0,p.h,0);
+    p.ski.visible=jet; p.board.visible=!jet&&!afoot&&!onride;
     if(jet){ p.ski.position.set(p.x,p.y+0.12,p.z); p.ski.rotation.set(0,p.h,0);
       p.rig.group.position.set(0,0.46,-0.42); poseJet(p.rig,0,0); }
+    else if(onride){ p.rig.group.position.set(0,0,0); poseSit(p.rig, waterTime); }
+    else if(afoot){ p.rig.group.position.set(0,0,0);
+      const psp=Math.hypot(p.vx,p.vz);
+      if(psp>0.8) poseWalk(p.rig, waterTime*7, Math.min(1,psp/5)); else poseStand(p.rig); }
     else{ p.rig.group.position.set(0,0,0);
       if(p.st==='ride'||p.st==='barrel') poseRide(p.rig,{bend:0.55,lean:0,twist:0});
       else if(p.st==='wipeout') poseWipe(p.rig,waterTime*1.4);
@@ -1124,6 +1211,14 @@ function drawRadar(){
     if(dd>R-12){ dx*=(R-12)/dd; dy*=(R-12)/dd; } return [R+dx,R+dy]; };
   rdc.fillStyle='rgba(231,214,164,.4)';
   for(const is of ISLANDS){ const [x,y]=P(is.x,is.z); rdc.beginPath(); rdc.arc(x,y,Math.max(3,is.r*sc),0,6.2832); rdc.fill(); }
+  // Draw Coney Island bounds
+  const [cx, cy] = P(0, -1600);
+  rdc.fillStyle = 'rgba(255, 99, 132, 0.4)';
+  rdc.fillRect(cx - 30, cy - 20, 60, 40);
+  rdc.strokeStyle = 'rgba(255, 99, 132, 0.8)';
+  rdc.lineWidth = 1;
+  rdc.strokeRect(cx - 30, cy - 20, 60, 40);
+  rdc.fillStyle = 'rgba(255,255,255,0.4)';
   for(let i=0;i<REEFS.length;i++){ const Rf=REEFS[i], wv=barrels[i].wave;
     const [x1,y1]=P(Rf.O.x,Rf.O.y), [x2,y2]=P(Rf.O.x+Rf.s.x*Rf.lineLen,Rf.O.y+Rf.s.y*Rf.lineLen);
     const act=wv&&wv.active;
@@ -1279,7 +1374,7 @@ let gullCryT=7;
 const keys={};
 addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.code==='KeyC') cycleCam(); if(e.code==='KeyR') resetToWave(); if(e.code==='Space') tryPopOrAir();
-  if(e.code==='KeyT') autoCatch(); if(e.code==='KeyJ') toggleJetski(); if(e.code==='KeyB') headToReef(); if(e.code==='KeyF') toggleWire();
+  if(e.code==='KeyT') autoCatch(); if(e.code==='KeyJ') toggleJetski(); if(e.code==='KeyB') headToReef(); if(e.code==='KeyF') toggleWire(); if(e.code==='KeyG'||e.code==='KeyE') interact(); if(e.code==='KeyN') teleportToConey();
   if(e.code==='KeyK'){ setPreset(envName==='day'?'golden':'day'); flash(envName==='day'?'MIDDAY':'GOLDEN HOUR'); }
   if(e.code==='KeyM') Aud.toggle();
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault(); });
@@ -1305,6 +1400,7 @@ if(IS_TOUCH){
     ()=>{ keys.Space=false; });
   bind('tbJet',()=>toggleJetski());
   bind('tbBrk',()=>headToReef());
+  bind('tbWalk',()=>interact());
 }
 
 /* ===================== STATE ===================== */
@@ -1337,7 +1433,7 @@ function headToReef(){
   reefIdx=(reefIdx+1)%REEFS.length; REEF=REEFS[reefIdx];
   S.pos.set(REEF.O.x - REEF.f.x*12, 0, REEF.O.y - REEF.f.y*12);
   S.heading=Math.atan2(REEF.f.x,REEF.f.y); S.vel.set(0,0,0); S.state='paddle'; S.stand=0; reclaimBoard();
-  flash('REEF BREAK '+(reefIdx+1)+' / '+REEFS.length); }
+  const names = ['REEF BREAK 1', 'REEF BREAK 2', 'REEF BREAK 3', 'REEF BREAK 4', 'CONEY ISLAND BREAK']; flash(names[reefIdx] || 'REEF BREAK'); }
 
 function nearReef(){ const r=distToReefTakeoff(S.pos.x,S.pos.z); return (r.along>-20 && r.along<REEF.lineLen*0.5 && Math.abs(r.off)<40); }
 
@@ -1354,16 +1450,231 @@ function enterBarrel(){ const wv=reefWave(waterTime); S.state='barrel'; S.airbor
   S.along=Math.max(8, wv.peel+8); S.faceV=0.38; S.vAlong=REEF.peelSpeed*1.05; flash('DROP IN!'); Aud.cue('pop'); camShake=0.5; }
 function autoCatch(){ if(S.mode!=='surf'||S.state!=='paddle') return;
   if(nearReef() && reefWave(waterTime).active) enterBarrel(); else if(curSetAmp>0.12) popUp(); else flash('WAIT FOR A SET'); }
-function toggleJetski(){ if(S.mode==='surf'){ if(S.state!=='paddle'){ flash('KICK OUT FIRST'); return; }
+function getWalkHeight(x, z) {
+  for (const is of ISLANDS) {
+    const dx = x - is.x, dz = z - is.z, d = Math.hypot(dx, dz);
+    if (d < is.r * 1.38) {
+      const baseR = is.r * 1.5, coneH = is.r * 0.18;
+      const topY = coneH - 7;
+      return topY - coneH * Math.min(1, d / baseR);
+    }
+  }
+  /* Coney Island — matches the actual meshes in coney.js exactly */
+  const localX = x;
+  const localZ = z + 1600;
+  if (Math.abs(localX) < 1140 && localZ > -1100 && localZ < 140) {
+    if (localZ >= 30.6 && localZ <= 45.4) return 0.95;            // boardwalk planks
+    if (localZ > 45.4) {                                          // sand: dry berm → shore slope underwater
+      const ripple = Math.sin(localX * 0.08) * 0.06 + Math.sin(localX * 0.021 + localZ * 0.2) * 0.05;
+      if (localZ <= 70) return 0.62 + ripple;
+      const u = Math.min(1, (localZ - 70) / 70);
+      return (0.62 + ripple) * (1 - u) + (-2.4) * u;
+    }
+    return 0.62;                                                  // plaza + city streets
+  }
+  return -999;
+}
+
+let talkCooldown = 0;
+function checkPeopleInteraction(dt) {
+  if (talkCooldown > 0) { talkCooldown -= dt; return; }
+  if (typeof coneyInstance === 'undefined' || !coneyInstance) return;
+  const people = coneyInstance.getPeople();
+  if (!people || people.length === 0) return;
+  let closestDist = 999;
+  let closestPerson = null;
+  const localX = S.pos.x;
+  const localZ = S.pos.z + 1600;
+  for (const p of people) {
+    const dist = Math.hypot(localX - p.x, localZ - p.currentZ);
+    if (dist < closestDist) { closestDist = dist; closestPerson = p; }
+  }
+  if (closestDist < 4.0) {
+    const dialogues = [
+      "Nice board! You catching the waves today?",
+      "Welcome to Coney Island! Enjoy the boardwalk!",
+      "The Cyclone is running fast today!",
+      "Have you tried the hot dogs at Nathan's?",
+      "Watch out for the sets, they are pumping!",
+      "Be careful on that jet ski, don't crash into the pier!",
+      "Did you ride the Wonder Wheel yet?",
+      "Beautiful weather for a stroll.",
+      "The water looks perfect today."
+    ];
+    const text = dialogues[closestPerson.idx % dialogues.length];
+    flash("CONEY LOCAL: \"" + text + "\"");
+    talkCooldown = 5.0;
+  }
+}
+
+/* ---- amusement rides + subway: attach to the animated ride node, hop off anywhere ---- */
+let RIDEABLES=null; const _rideV=new THREE.Vector3();
+function nearestRide(){
+  if(!RIDEABLES && window.__coneyReady && coneyInstance) RIDEABLES=coneyInstance.getRideables();
+  if(!RIDEABLES) return null;
+  let best=null, bd=1e9;
+  for(const r of RIDEABLES){ let gx,gz;
+    if(r.gateLocal){ gx=r.gateLocal.x; gz=r.gateLocal.z-1600; }
+    else { r.gate.getWorldPosition(_rideV); gx=_rideV.x; gz=_rideV.z; }
+    const d=Math.hypot(S.pos.x-gx,S.pos.z-gz)-r.gr;
+    if(d<bd){ bd=d; best=r; } }
+  return bd<9 ? best : null;
+}
+function boardRide(r){
+  r.seat.updateWorldMatrix(true,false); _rideV.copy(r.off); r.seat.localToWorld(_rideV);
+  S.mode='attraction'; S.ride=r;
+  S.pos.set(_rideV.x,0,_rideV.z); S.y=_rideV.y; S.vel.set(0,0,0); S.vy=0; S.airborne=false;
+  player.board.visible=false; leash.visible=false;
+  flash('RIDING THE '+r.name+'!'); Aud.cue('made'); camShake=0.25;
+}
+function exitRide(){
+  const r=S.ride; S.ride=null; S.mode='walk';
+  let ex=S.pos.x, ez=S.pos.z, ey=S.y;
+  if(r){ if(r.gateLocal){ r.seat.getWorldPosition(_rideV); ex=clamp(_rideV.x,-1080,1080); ez=_rideV.z+5; ey=_rideV.y; }
+    else { r.gate.getWorldPosition(_rideV); ex=_rideV.x; ez=_rideV.z+r.gr*0.6; ey=Math.max(S.y,2); } }
+  S.pos.set(ex,0,ez); S.y=ey; S.vy=0; S.vel.set(0,0,0); S.airborne=true;   // hop down
+  player.board.visible=true;
+  if(r) addCombo('RODE THE '+r.name, 60);
+}
+let rpT=0;
+const RIDE_ICON={ 'WONDER WHEEL':'🎡','CYCLONE':'🎢','CAROUSEL':'🎠','SUBWAY':'🚇' };
+function updateRidePrompt(){
+  const el=document.getElementById('ridePrompt');
+  const near=(running && S.mode==='walk') ? nearestRide() : null;
+  if(near){ document.getElementById('rideName').textContent=(RIDE_ICON[near.name]||'🎟')+' '+near.name;
+    document.getElementById('rideSub').innerHTML=IS_TOUCH?'tap <b>RIDE</b> to hop on':'press <kbd>G</kbd> to ride';
+    el.className='on'; }
+  else el.className='';
+  if(IS_TOUCH){ const b=document.getElementById('tbWalk');
+    b.textContent = S.mode==='attraction' ? 'HOP OFF' : (near ? 'RIDE' : (S.mode==='walk' ? 'BOARD' : 'WALK')); }
+}
+function interact(){
+  if(!running) return;
+  if(S.mode==='attraction'){ exitRide(); return; }
+  if(S.mode==='walk'){ const r=nearestRide(); if(r){ boardRide(r); return; } }
+  toggleWalk();
+}
+function toggleWalk() {
+  if (S.mode === 'walk') {
+    let nearSki = jetski.visible && S.pos.distanceTo(jetski.position) < 15;
+    if (nearSki) {
+      S.mode = 'jetski';
+      player.grp.visible = false;
+      player.board.visible = false;
+      jetski.visible = true;
+      jetRig.group.visible = true;
+      flash('MOUNTED JET SKI');
+    } else {
+      S.mode = 'surf';
+      S.state = 'paddle';
+      player.grp.visible = true;
+      player.board.visible = true;
+      S.stand = 0;
+      reclaimBoard();
+      flash('PADDLING');
+    }
+  } else {
+    const walkY = getWalkHeight(S.pos.x, S.pos.z);
+    if (walkY > -0.85) {
+      if (S.mode === 'jetski') {
+        jetski.position.copy(S.pos);
+        jetski.visible = true;
+        jetRig.group.visible = false;
+        player.grp.visible = true;
+        player.board.visible = false;
+      } else {
+        releaseBoard();
+        player.grp.visible = true;
+        player.board.visible = true;
+      }
+      S.mode = 'walk';
+      S.vy = 0;                      // walk physics eases S.y onto the ground — no snap
+      flash('WALKING MODE');
+    } else {
+      flash('TOO DEEP TO WALK - GET CLOSER TO SHORE');
+    }
+  }
+}
+
+function teleportToConey() {
+  reefIdx = 4;
+  REEF = REEFS[reefIdx];
+  
+  S.mode = 'surf';
+  S.state = 'paddle';
+  S.pos.set(0, 0, -1245);
+  S.vel.set(0, 0, -6);
+  S.heading = Math.PI;
+  S.y = 0; S.vy = 0; S.airborne = false; S.stand = 0; S.wipeT = 0; S.loseT = 0; S.barrelTime = 0; rideTime = 0;
+  reclaimBoard();
+  jetski.visible = false;
+  player.grp.visible = true;
+  player.board.visible = true;
+  flash('CONEY ISLAND LINEUP');
+}
+
+function toggleJetski(){ if(S.mode==='walk'){ flash('GET ON BOARD/SKI FIRST'); return; } if(S.mode==='surf'){ if(S.state!=='paddle'){ flash('KICK OUT FIRST'); return; }
     S.mode='jetski'; player.grp.visible=false; player.board.visible=false; jetski.visible=true; flash('JET SKI'); }
   else { S.mode='surf'; S.state='paddle'; jetski.visible=false; player.grp.visible=true; player.board.visible=true; S.stand=0; flash('PADDLE'); } }
 
 /* ===================== PHYSICS ===================== */
 function physics(dt){
   const t=waterTime;
+  if (S.mode === 'walk') {
+    let turn=0; if(keys.KeyA||keys.ArrowLeft) turn+=1; if(keys.KeyD||keys.ArrowRight) turn-=1;
+    const sp = Math.hypot(S.vel.x, S.vel.z);
+    S.popT = Math.max(0, S.popT - dt);
+    S.heading += turn * 2.8 * dt;
+    headingDir(dirVec);
+    const walkVal = (keys.KeyW || keys.ArrowUp) ? 1 : ((keys.KeyS || keys.ArrowDown) ? -1 : 0);
+    const targetSp = walkVal * 5.5;
+    S.vel.x += (dirVec.x * targetSp - S.vel.x) * Math.min(1, dt * 8);
+    S.vel.z += (dirVec.z * targetSp - S.vel.z) * Math.min(1, dt * 8);
+    const prevX = S.pos.x, prevZ = S.pos.z;
+    S.pos.x += S.vel.x * dt;
+    S.pos.z += S.vel.z * dt;
+    
+    const terrainY = getWalkHeight(S.pos.x, S.pos.z);
+    if (terrainY <= -900) { S.pos.x = prevX; S.pos.z = prevZ; S.vel.set(0, 0, 0); }
+    else if (terrainY < -0.95 && !S.airborne) { toggleWalk(); return; }   // waded past waist depth → paddle out
+    if (!S.airborne) {
+      S.vy = 0;
+      S.y += (terrainY - S.y) * Math.min(1, dt * 12);                     // smooth steps and slopes
+      if (keys.Space) { S.vy = 5.6; S.airborne = true; S.y = terrainY + 0.05; }
+      const wet = sampleWater(S.pos.x, S.pos.z, t).y;
+      if (terrainY < wet - 0.04 && sp > 1.2 && Math.random() < dt * 6) splashAt(S.pos.x, S.pos.z, 0.35);  // wading splashes
+    } else {
+      S.vy -= 18 * dt;
+      S.y += S.vy * dt;
+      if (S.y < terrainY) { S.y = terrainY; S.vy = 0; S.airborne = false; }
+    }
+    return;
+  }
+
+  /* -------- ON A RIDE: the attraction carries you -------- */
+  if (S.mode === 'attraction') {
+    const r = S.ride;
+    if (!r || !r.seat.parent) { S.mode = 'walk'; S.ride = null; return; }
+    r.seat.updateWorldMatrix(true, false);
+    _rideV.copy(r.off); r.seat.localToWorld(_rideV);
+    const px = S.pos.x, pz = S.pos.z;
+    S.pos.set(_rideV.x, 0, _rideV.z); S.y = _rideV.y;
+    if (dt > 1e-4) { S.vel.x = (S.pos.x - px) / dt * 0.5; S.vel.z = (S.pos.z - pz) / dt * 0.5; }
+    const hs = Math.hypot(S.vel.x, S.vel.z);
+    if (hs > 2) { const th = Math.atan2(S.vel.x, S.vel.z);        // face where the ride is going
+      S.heading += Math.atan2(Math.sin(th - S.heading), Math.cos(th - S.heading)) * Math.min(1, dt * 4); }
+    S.catchOpen = false;
+    return;
+  }
   let turn=0; if(keys.KeyA||keys.ArrowLeft) turn+=1; if(keys.KeyD||keys.ArrowRight) turn-=1;
   const speed=Math.hypot(S.vel.x,S.vel.z);
   S.popT=Math.max(0,S.popT-dt);
+
+  /* ride/drive all the way onto Coney sand → step off smoothly (any vehicle) */
+  if (S.pos.z <= -1506 && Math.abs(S.pos.x) < 1140 && S.state !== 'wipeout') {
+    toggleWalk();
+    if (S.mode === 'walk') { S.vel.x *= 0.25; S.vel.z *= 0.25; flash('ON THE SAND'); return; }
+  }
 
   /* -------- JET SKI: planing hull, bow rise, sliding turns, rooster tail -------- */
   if(S.mode==='jetski'){
@@ -1502,10 +1813,25 @@ function physics(dt){
   islandCollide();
   if(rideTime>0.8) bestRide=Math.max(bestRide,rideTime);
   if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=0; hideCombo(); } }
+  
 }
-function islandCollide(){ for(const is of ISLANDS){ const dx=S.pos.x-is.x, dz=S.pos.z-is.z, d=Math.hypot(dx,dz), edge=is.r*1.38;
-  if(d<edge){ const nx=dx/(d||1), nz=dz/(d||1); S.pos.x=is.x+nx*edge; S.pos.z=is.z+nz*edge;
-    const vd=S.vel.x*nx+S.vel.z*nz; S.vel.x-=1.6*vd*nx; S.vel.z-=1.6*vd*nz; } } }
+function islandCollide(){ 
+  for(const is of ISLANDS){ const dx=S.pos.x-is.x, dz=S.pos.z-is.z, d=Math.hypot(dx,dz), edge=is.r*1.38;
+    if(d<edge){ const nx=dx/(d||1), nz=dz/(d||1); S.pos.x=is.x+nx*edge; S.pos.z=is.z+nz*edge;
+      const vd=S.vel.x*nx+S.vel.z*nz; S.vel.x-=1.6*vd*nx; S.vel.z-=1.6*vd*nz; } 
+  }
+  // Coney Island Beach Bounds Collision
+  if (S.mode !== 'walk') {
+    const coneyZLimit = -1512;
+    const coneyXHalf = 1140;
+    if (S.pos.z < coneyZLimit && Math.abs(S.pos.x) < coneyXHalf) {
+      const speed = Math.hypot(S.vel.x, S.vel.z);
+      S.pos.z = coneyZLimit;
+      S.vel.z = Math.max(0, S.vel.z);
+      if (speed > 16) { wipeout(); }
+    }
+  }
+}
 
 function landAir(){ const sp=Math.hypot(S.vel.x,S.vel.z);
   const spinMod=((S.spin%360)+360)%360; const err=Math.min(spinMod,360-spinMod);
@@ -1535,6 +1861,40 @@ let statusTimer=0; function flash(text){ const el=document.getElementById('statu
 /* ===================== PLACE PLAYER / RIGS IN WORLD ===================== */
 const _rt=new THREE.Vector3();
 function placePlayer(dt,t){
+  if (S.mode === 'walk') {
+    player.grp.position.set(S.pos.x, S.y, S.pos.z);
+    player.grp.rotation.set(0, 0, 0);
+    player.grp.rotateY(S.heading);
+    const sp = Math.hypot(S.vel.x, S.vel.z);
+    const walkVal = (keys.KeyW || keys.ArrowUp) ? 1 : ((keys.KeyS || keys.ArrowDown) ? -1 : 0);
+    if (walkVal !== 0) {
+      S.walkPhase = (S.walkPhase || 0) + dt * 10 * (sp / 5.5);
+      poseWalk(player.rig, S.walkPhase, sp / 5.5);
+    } else {
+      S.walkPhase = 0;
+      poseStand(player.rig);
+    }
+    player.rig.apply(dt);
+    if (jetski.visible) {                       // parked ski bobs on the water (or rests on sand)
+      const jw = sampleWater(jetski.position.x, jetski.position.z, t);
+      const gy = getWalkHeight(jetski.position.x, jetski.position.z);
+      jetski.position.y = Math.max(gy, jw.y) + 0.12;
+      jetski.rotation.x = jw.normal.z * 0.35; jetski.rotation.z = -jw.normal.x * 0.35;
+    }
+    syncBoard(dt, t);
+    updateLeash();
+    return;
+  }
+  if (S.mode === 'attraction') {
+    player.grp.position.set(S.pos.x, S.y, S.pos.z);
+    player.grp.rotation.set(0, 0, 0);
+    player.grp.rotateY(S.heading);
+    poseSit(player.rig, waterTime);             // hold on and enjoy the view
+    player.rig.apply(dt);
+    syncBoard(dt, t);
+    leash.visible = false;
+    return;
+  }
   if(S.mode==='jetski'){
     headingDir(dirVec);
     jetski.position.set(S.pos.x,S.y+0.12,S.pos.z); jetski.rotation.set(0,0,0);
@@ -1611,7 +1971,8 @@ function updateCamera(dt){
   barrelMix=0;
   headingDir(dirVec);
   let back,up,ahead;
-  if(S.mode==='jetski'){ back=12+sp*0.16; up=5.5; ahead=10; }
+  if(S.mode==='attraction'){ back=12; up=4.2; ahead=9; }
+  else if(S.mode==='walk'){ back=7; up=2.4; ahead=6; } else if(S.mode==='jetski'){ back=12+sp*0.16; up=5.5; ahead=10; }
   else if(S.state==='paddle'){ back=9; up=4.2; ahead=7; }
   else if(S.state==='wipeout'){ back=8; up=2.4; ahead=6; }
   else if(camMode===0){ back=11+sp*0.18; up=5.5; ahead=10; } else if(camMode===1){ back=22; up=12; ahead=14; } else { back=7; up=2.4; ahead=12; }
@@ -1676,12 +2037,12 @@ const elSpeed=document.getElementById('speedBig'), elState=document.getElementBy
       elBest=document.getElementById('best'), elBTube=document.getElementById('besttube'), elSet=document.getElementById('setmeter'),
       elCatch=document.getElementById('catch'), elBarrel=document.getElementById('barrel'), elTube=document.getElementById('tube'),
       elReefDir=document.getElementById('reefdir'), elReefDist=document.getElementById('reefdist');
-const LABEL={paddle:'PADDLE',ride:'RIDING',barrel:'BARREL',wipeout:'WIPEOUT'};
-const COLOR={paddle:'#2a6f7a',ride:'#1f9e57',barrel:'#0e8ec9',wipeout:'#b8432e'};
+const LABEL={paddle:'PADDLE',ride:'RIDING',barrel:'BARREL',wipeout:'WIPEOUT',walk:'WALKING'};
+const COLOR={paddle:'#2a6f7a',ride:'#1f9e57',barrel:'#0e8ec9',wipeout:'#b8432e',walk:'#8e44ad'};
 function updateHUD(){
   elSpeed.innerHTML=`${Math.round(Math.hypot(S.vel.x,S.vel.z)*2.0)}<small> mph</small>`;
-  const lab = S.mode==='jetski' ? 'JET SKI' : (LABEL[S.state]||S.state); elState.textContent=lab;
-  elState.style.background = S.mode==='jetski' ? '#c0392b' : (COLOR[S.state]||'#2a6f7a');
+  const lab = S.mode==='attraction' ? (S.ride?S.ride.name:'RIDE') : (S.mode==='walk' ? 'WALKING' : (S.mode==='jetski' ? 'JET SKI' : (LABEL[S.state]||S.state))); elState.textContent=lab;
+  elState.style.background = S.mode==='attraction' ? '#d35400' : (S.mode==='walk' ? '#8e44ad' : (S.mode==='jetski' ? '#c0392b' : (COLOR[S.state]||'#2a6f7a')));
   elScore.textContent=Math.floor(score); elBest.textContent=bestRide.toFixed(1)+'s'; elBTube.textContent=bestTube.toFixed(1)+'s';
   const bars=Math.round(curSetAmp*5); elSet.textContent=curSetAmp<0.12?'lull':'▮'.repeat(bars)+'▯'.repeat(5-bars);
   elCatch.className=S.catchOpen?'on':''; elBarrel.className=S.barreled?'on':'';
@@ -1703,18 +2064,20 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
   envLerp(dt); applyEnv();
   updateLumps(waterTime);
   { const LP=oceanMat.uniforms.uLumpP.value;
-    for(let i=0;i<4;i++){ const L=LUMPS[i]; LP[i].set(L.cx,L.cz,L.amp,Math.max(1,L.w)); } }
+    for(let i=0;i<LUMPS.length;i++){ const L=LUMPS[i]; LP[i].set(L.cx,L.cz,L.amp,Math.max(1,L.w)); } }
   oceanMat.uniforms.uTime.value=waterTime; oceanMat.uniforms.uSetAmp.value=curSetAmp;
   skyMat.uniforms.uTime.value=waterTime; skyMat.uniforms.uCloud.value=ENV.cloud;
   bMat.uniforms.uTime.value=waterTime;
   for(const b of barrels) b.update(waterTime);
   reefFX(dt);
-  if(running){ physics(dt); placePlayer(dt,waterTime); focus.copy(S.pos); updateCamera(dt); }
+  if(running){ physics(dt); placePlayer(dt,waterTime); focus.copy(S.pos); updateCamera(dt); if(S.mode==='walk') checkPeopleInteraction(dt); }
+  if(coneyInstance && Math.hypot(focus.x, focus.z+1600)<1900) coneyInstance.update(dt, waterTime);
   else { attractCam(dt); focus.set(REEF.O.x,0,REEF.O.y); }
   for(const a of ais) a.update(dt,waterTime);
   updatePeers(dt);
   if(running){ const pn=performance.now(); if(pn-MP.lastPub>200){ MP.lastPub=pn; mpSend(); } }
   lbT+=dt; if(lbT>0.5){ lbT=0; updateLB(); }
+  rpT+=dt; if(rpT>0.3){ rpT=0; updateRidePrompt(); }
   if(running) drawRadar();
   updateGulls(dt,waterTime); updatePod(dt,waterTime);
   spray.update(dt); mist.update(dt); updateRings(dt); wakeSurf.update(dt); wakeJet.update(dt);
@@ -1757,13 +2120,18 @@ player.grp.visible=false; player.board.visible=false; leash.visible=false;
 const nameI=document.getElementById('pname'), roomI=document.getElementById('proom');
 nameI.value=localStorage.getItem('surfName')||('RIDER'+Math.floor(10+Math.random()*89));
 roomI.value=(new URLSearchParams(location.search).get('room'))||localStorage.getItem('surfRoom')||'LINEUP';
-document.getElementById('go').addEventListener('click',()=>{ Aud.init();
+function startRun(){ Aud.init();
   const nm=sanitizeName(nameI.value)||'RIDER', rm=sanitizeName(roomI.value).replace(/ /g,'')||'LINEUP';
   localStorage.setItem('surfName',nm); localStorage.setItem('surfRoom',rm);
   if(!MP.name) mpJoin(nm,rm);
   updateLB();
   document.getElementById('intro').classList.add('hidden');
-  player.board.visible=true; resetToWave(); running=true; last=performance.now(); });
+  player.board.visible=true; resetToWave(); running=true; last=performance.now(); }
+document.getElementById('go').addEventListener('click',startRun);
+  document.getElementById('nycBtn').addEventListener('click', () => {
+    startRun();               // same path as Paddle Out — multiplayer joins here too
+    teleportToConey();
+  });
 window.__surf=S; window.__reefWave=()=>reefWave(waterTime);
 window.__startAir=(sp)=>{ if(S.state==='ride'&&!S.airborne) startAir(sp||20); };
 window.__reefDir=()=>({sx:REEF.s.x,sz:REEF.s.y,ox:REEF.O.x,oz:REEF.O.y});
@@ -1772,6 +2140,10 @@ window.__enterBarrel=()=>{ if(running&&S.mode==='surf') enterBarrel(); };
 window.__jet=toggleJetski; window.__wire=toggleWire; window.__lumps=()=>LUMPS;
 window.__ais=()=>ais.map(a=>({x:a.grp.position.x,z:a.grp.position.z,st:a.state}));
 window.__mp=MP; window.__mpRecv=mpRecv; window.__keys=keys;
+window.__walk=toggleWalk; window.__coney=teleportToConey; window.__walkH=getWalkHeight;
+window.__interact=interact; window.__rides=()=>{ if(!RIDEABLES&&coneyInstance&&window.__coneyReady) RIDEABLES=coneyInstance.getRideables(); return RIDEABLES; };
+window.__boardRide=boardRide;
+window.__info=()=>({calls:renderer.info.render.calls,tris:renderer.info.render.triangles});
 </script>
 </body>
 </html>

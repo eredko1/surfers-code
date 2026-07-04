@@ -1,42 +1,38 @@
-# SURFERS CODE 🌊
+# SURFERS CONEY 🌊🎡
 
-An open-world multiplayer surf game in **a single 120 KB HTML file**. No build, no assets, no backend, no accounts — everything (ocean, sky, characters, barrels, audio) is generated procedurally in code.
+An open-world surf game — with **Coney Island on the horizon**. One HTML file plus one island module. No build step, no backend, no accounts.
 
-**Play:** open `index.html`, or the hosted link. Works on desktop and phones.
+Surf the tropical reef breaks, then jet-ski north: Coney Island materializes out of the haze — boardwalk, Wonder Wheel, Cyclone, Parachute Jump, elevated subway, streets full of yellow cabs, and crowds strolling the planks.
 
-## Multiplayer
+## The Coney loop
 
-Type a **name** and a **room word** on the start screen. Everyone who enters the same room word rides the *same ocean* — waves and sets are synchronized to the wall clock, so you can split the same barrel. Live leaderboard of everyone in the room. Crash into each other (board or jet ski) for points.
-
-Share a room directly: `...?room=YOURWORD`
-
-Position packets travel through a public MQTT relay over WebSockets — nothing is stored, nobody registers, closing the tab removes you from the lineup. Pick a room word your friends can remember and strangers can't guess.
+- **Catch the Coney Island Break** (`B` cycles to it, or hit the CONEY ISLAND button on the title screen) — it peels right toward the sand.
+- **Ride all the way in.** When your board touches the shallows you step off automatically and just keep walking up the beach — no button needed.
+- **Walk mode** (`G`, or the WALK button on phones): stroll the sand, up onto the boardwalk, into the streets. Locals chat with you when you get close.
+- **Wade back into the water** and you're automatically paddling again. Your board or jet ski stays floating where you left it — walk back and press `G` to remount.
+- **Golden hour** (`K`): the rides and boardwalk bulbs glow against the sunset.
 
 ## Controls
 
-| Desktop | Action |
+| Keyboard | Action |
 | --- | --- |
-| `W` | paddle / pump |
-| `A` `D` | carve · stall deeper / race the section · spin in the air |
-| `Space` | pop up · air off the lip (hold = grab) |
-| `S` | slow / kick out |
+| `W` `A` `S` `D` | paddle / carve / stall — or walk and turn on land |
+| `Space` | pop up · air (hold = grab) · jump on land |
+| `G` | dismount / remount (walk mode) |
 | `J` | jet ski |
-| `B` | next reef break |
-| `T` | auto-catch |
-| `C` / `K` / `F` / `M` / `R` | camera · golden hour · wireframe · sound · reset |
+| `B` | next break (4 reefs + Coney Island) |
+| `T` / `C` / `K` / `M` / `R` | auto-catch · camera · golden hour · sound · reset |
 
-On phones: virtual joystick (push up to paddle, pull back to stall) + **POP / JET SKI / BREAK** buttons.
+Phones: virtual joystick + **POP / JET SKI / BREAK / WALK** buttons.
 
-## How it fits in one small file
+## Multiplayer
 
-- **Ocean** — Gerstner wave math evaluated in a GPU vertex shader; sky and water reflections share one GLSL `skyColor()` function
-- **Barrels** — a 124×30 point grid bent through a curling cross-section every frame, synced to an 18-second set cycle with traveling swell lumps
-- **Characters** — ~15 primitive capsules posed by procedural animation (paddle, ride, barrel stall, airs, wipeouts)
-- **Audio** — synthesized live with Web Audio (filtered noise ocean, sawtooth jet engine, dolphin chirps)
-- **Radar, spray, wakes, leash** — canvas textures and dynamic buffers, all built at load
+Same as Surfers Code: type a name and a shared room word — everyone in the room rides the same wall-clock-synced ocean, sees each other (surfing, jet-skiing, *and walking the boardwalk*), shares a live leaderboard, and scores points crashing into each other.
 
-The only external dependency is Three.js, streamed from a CDN — so the game needs internet the first time it opens.
+## Running locally
 
----
+```bash
+npx -y serve . -p 3000   # or: python3 -m http.server 3000
+```
 
-Built with [Claude Code](https://claude.com/claude-code).
+Open `http://localhost:3000`. Needs internet for the Three.js CDN. The city assembles progressively in the background over the first seconds — the ocean is playable instantly.
