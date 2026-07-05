@@ -213,7 +213,7 @@
 </script>
 
 <script type="module">
-let THREE, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, OutputPass, mergeGeometries;
+let THREE, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, OutputPass, mergeGeometries, SSAOPass;
 import { createConeyIsland } from './coney.js';
 try {
   THREE = await import('three');
@@ -223,6 +223,7 @@ try {
   ({UnrealBloomPass}= await import('three/addons/postprocessing/UnrealBloomPass.js'));
   ({OutputPass}     = await import('three/addons/postprocessing/OutputPass.js'));
   ({mergeGeometries}= await import('three/addons/utils/BufferGeometryUtils.js'));
+  ({SSAOPass}       = await import('three/addons/postprocessing/SSAOPass.js'));
 } catch (e) { const el=document.getElementById('err'); el.style.display='flex';
   el.innerHTML='Could not load Three.js from the CDN.<br>This game needs internet the first time you open it.<br><br><small>'+e+'</small>'; throw e; }
 
@@ -1003,6 +1004,11 @@ function coneyMergePass(){
 }
 /* Unify Coney with the game's look: convert PBR materials to the same Lambert response the
    islands/characters use (also much faster to draw), and warm the NYC greys toward the palette */
+const ASPHALT_DETAIL=(()=>{ const t=canvasTex((g,s)=>{ g.fillStyle='#f2f2f2'; g.fillRect(0,0,s,s);
+  for(let i=0;i<700;i++){ const v=Math.random(); g.fillStyle='rgba('+(v<0.5?'40,42,46':'220,222,226')+','+(0.05+Math.random()*0.14).toFixed(2)+')';
+    g.beginPath(); g.arc(Math.random()*s,Math.random()*s,Math.random()*1.8,0,6.28); g.fill(); }
+  for(let i=0;i<8;i++){ g.fillStyle='rgba(30,32,36,0.10)'; g.fillRect(Math.random()*s,0,1+Math.random()*3,s); } },128);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(50,50); return t; })();
 const GROUND_DETAIL=(()=>{ const t=canvasTex((g,s)=>{ g.fillStyle='#fff'; g.fillRect(0,0,s,s);
   for(let i=0;i<520;i++){ g.fillStyle='rgba(70,80,55,'+(0.04+Math.random()*0.12).toFixed(2)+')';
     g.beginPath(); g.arc(Math.random()*s,Math.random()*s,Math.random()*2.4,0,6.28); g.fill(); } },128);
@@ -1015,10 +1021,13 @@ function coneyStylePass(){
     if(cache.has(m.uuid)) return cache.get(m.uuid);
     const L=new THREE.MeshLambertMaterial();
     if(m.color){ const hex=m.color.getHex(); L.color.setHex(RECOLOR[hex]??hex);
-      if(hex===0xa8b1ba||hex===0x8a8580) L.map=GROUND_DETAIL; }
+      if(hex===0xa8b1ba||hex===0x8a8580) L.map=GROUND_DETAIL;
+      if(hex===0x444a52||hex===0x464c54) L.map=ASPHALT_DETAIL; }   // streets + avenues get worn asphalt grain
     if(!L.map) L.map=m.map||null;
     if(m.emissive) L.emissive.copy(m.emissive);
+    L.emissiveMap=m.emissiveMap||null;
     L.emissiveIntensity=m.emissiveIntensity??1;
+    if(m.userData&&m.userData.nightGlow!=null) L.userData.nightGlow=m.userData.nightGlow;
     L.transparent=m.transparent; L.opacity=m.opacity; L.side=m.side;
     L.flatShading=m.flatShading===true; L.vertexColors=m.vertexColors===true;
     cache.set(m.uuid,L); return L;
@@ -1189,7 +1198,7 @@ function mpJoin(name,room){
 }
 function mpSend(){ if(!MP.name) return;
   const o={i:MP.id,n:MP.name,x:+S.pos.x.toFixed(1),z:+S.pos.z.toFixed(1),y:+S.y.toFixed(2),
-    h:+S.heading.toFixed(2),m:S.mode==='jetski'?1:(S.mode==='walk'?2:(S.mode==='attraction'?3:(S.mode==='car'?4:0))),s:S.state,sc:Math.floor(score)};
+    h:+S.heading.toFixed(2),m:S.mode==='jetski'?1:(S.mode==='walk'?2:(S.mode==='attraction'?3:(S.mode==='car'?4:(S.mode==='heli'?5:0)))),s:S.state,sc:Math.floor(score)};
   try{ MP.bc&&MP.bc.postMessage(o); }catch(e){}
   if(MP.mqtt&&MP.net){ try{ MP.mqtt.publish(mpTopic(),JSON.stringify(o)); }catch(e){} }
 }
@@ -1232,7 +1241,7 @@ function updatePeers(dt){ const now=performance.now();
     p.ski.visible=jet; p.board.visible=!jet&&!afoot&&!onride;
     if(jet){ p.ski.position.set(p.x,p.y+0.12,p.z); p.ski.rotation.set(0,p.h,0);
       p.rig.group.position.set(0,0.46,-0.42); poseJet(p.rig,0,0); }
-    else if(onride||p.mode===4){ p.rig.group.position.set(0,0,0); poseSit(p.rig, waterTime); }
+    else if(onride||p.mode>=4){ p.rig.group.position.set(0,0,0); poseSit(p.rig, waterTime); }
     else if(afoot){ p.rig.group.position.set(0,0,0);
       const psp=Math.hypot(p.vx,p.vz);
       if(psp>0.8) poseWalk(p.rig, waterTime*7, Math.min(1,psp/5)); else poseStand(p.rig); }
@@ -1298,7 +1307,11 @@ function drawRadar(){
     rdc.lineWidth=act?3:2; rdc.beginPath(); rdc.moveTo(x1,y1); rdc.lineTo(x2,y2); rdc.stroke(); }
   for(const L of LUMPS){ if(L.amp<0.4) continue; const [x,y]=P(L.cx,L.cz);
     rdc.fillStyle='rgba(126,240,230,.7)'; rdc.beginPath(); rdc.arc(x,y,2.5,0,6.2832); rdc.fill(); }
-  rdc.font='bold 9px sans-serif'; rdc.textAlign='center';
+  rdc.font='10px sans-serif'; rdc.textAlign='center';
+  { const [gx,gy]=P(60,-1562); rdc.fillText('🎯',gx,gy+3);
+    const [nx2,ny2]=P(-20,-1570); rdc.fillText('🌭',nx2,ny2+3);
+    const [hx,hy]=P(heli.position.x,heli.position.z); rdc.fillText('🚁',hx,hy+3); }
+  rdc.font='bold 9px sans-serif';
   for(const p of MP.peers.values()){ const [x,y]=P(p.x,p.z);
     rdc.fillStyle='#ffb066'; rdc.beginPath(); rdc.arc(x,y,3,0,6.2832); rdc.fill();
     rdc.fillStyle='rgba(255,200,150,.95)'; rdc.fillText(p.name.slice(0,5),x,y-6); }
@@ -1389,6 +1402,10 @@ const stars=(()=>{ const n=650, pos=new Float32Array(n*3);
   const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(pos,3));
   const m=new THREE.Points(g,new THREE.PointsMaterial({color:0xd8e6ff,size:1.7,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false}));
   m.frustumCulled=false; m.userData.noWire=true; scene.add(m); return m; })();
+const GLOW_DOMES=[[0,-1560,320,0xffc98a],[-320,-1680,260,0xffb070],[320,-1680,260,0xffd9a8]].map(([x,z,sc,c])=>{
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.soft,color:c,transparent:true,opacity:0,
+    blending:THREE.AdditiveBlending,depthWrite:false}));
+  sp.position.set(x,34,z); sp.scale.set(sc,sc*0.55,1); sp.userData.noWire=true; scene.add(sp); return sp; });
 const FW_POOLS=[0xffc46a,0x7ef0e6,0xff7ab0,0xbfd0ff].map(c=>new PointPool(320,TEX.soft,c,THREE.AdditiveBlending,1.0,false));
 let fwSlot=-1;
 function updateFireworks(){
@@ -1710,9 +1727,11 @@ const INTERACTABLES=[
   {name:"NATHAN'S FAMOUS", icon:'🌭', x:-20, z:-1570, r:16, act:()=>{ if((S.dogCool||0)>waterTime) { flash('ONE AT A TIME!'); return; }
       S.dogCool=waterTime+30; S.boostT=60; score+=50; flash("NATHAN'S FAMOUS 🌭 +SPEED BOOST!"); Aud.cue('combo'); }},
   {name:'RING TOSS', icon:'🎯', x:60, z:-1562, r:9, act:()=>startRingToss()},
+  {name:'HELICOPTER', icon:'🚁', dyn:()=>heli.position, r:7, act:()=>enterHeli()},
 ];
 function nearestInteractable(){ let best=null,bd=1e9;
-  for(const it of INTERACTABLES){ const d=Math.hypot(S.pos.x-it.x,S.pos.z-it.z)-it.r; if(d<bd){bd=d;best=it;} }
+  for(const it of INTERACTABLES){ const p=it.dyn?it.dyn():it;
+    const d=Math.hypot(S.pos.x-p.x,S.pos.z-p.z)-it.r; if(d<bd){bd=d;best=it;} }
   return bd<0?best:null; }
 /* ring toss: tap SPACE when the marker crosses the green */
 const RT={on:false,mark:0,dir:1,throws:0,hits:0};
@@ -1734,13 +1753,60 @@ const cab=(()=>{ const g=new THREE.Group();
   const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.62,2.2),yl); cabin.position.set(0,1.35,-0.2); g.add(cabin);
   const glass=new THREE.Mesh(new THREE.BoxGeometry(1.82,0.44,2.0),new THREE.MeshPhongMaterial({color:0x18262f,shininess:100,specular:0x99bbcc}));
   glass.position.set(0,1.36,-0.2); g.add(glass);
-  const sign=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.22,0.32),dk); sign.position.set(0,1.78,-0.2); g.add(sign);
+  const signTex=canvasTex((gg,s)=>{ gg.fillStyle='#151515'; gg.fillRect(0,0,s,s);
+    gg.fillStyle='#ffd23f'; gg.fillRect(4,s*0.3,s-8,s*0.4);
+    gg.fillStyle='#151515'; gg.font='bold '+Math.floor(s*0.28)+'px Helvetica,Arial'; gg.textAlign='center'; gg.textBaseline='middle'; gg.fillText('TAXI',s/2,s/2+1); },64);
+  const sign=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.22,0.32), new THREE.MeshLambertMaterial({map:signTex,emissive:0xffd23f,emissiveMap:signTex,emissiveIntensity:0.35})); sign.position.set(0,1.78,-0.2); g.add(sign);
+  for(const sx of [-1,1]){                                    // headlights, taillights, mirrors
+    const hl=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.16,0.06), new THREE.MeshLambertMaterial({color:0xfff8dd,emissive:0xfff3c0,emissiveIntensity:1.4}));
+    hl.position.set(sx*0.6,0.78,2.21); g.add(hl);
+    const tl=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.14,0.06), new THREE.MeshLambertMaterial({color:0xd42a2a,emissive:0xff2222,emissiveIntensity:1.1}));
+    tl.position.set(sx*0.6,0.82,-2.21); g.add(tl);
+    const mir=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.12,0.2), new THREE.MeshLambertMaterial({color:0x151515}));
+    mir.position.set(sx*1.06,1.25,0.85); g.add(mir); }
   const checker=new THREE.Mesh(new THREE.BoxGeometry(2.02,0.16,4.42),dk); checker.position.y=1.02; g.add(checker);
   for(const [wx,wz] of [[-0.95,1.45],[0.95,1.45],[-0.95,-1.5],[0.95,-1.5]]){
     const w=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.28,10),dk); w.rotation.z=Math.PI/2; w.position.set(wx,0.4,wz); g.add(w); }
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   g.visible=false; scene.add(g); return g; })();
 let cabParked=false;
+/* ---- boardwalk helicopter: hold Space to lift, W/S fly, land anywhere ---- */
+const heli=(()=>{ const g=new THREE.Group();
+  const red=new THREE.MeshPhongMaterial({color:0xc62828,shininess:85,specular:0x775555});
+  const dk=new THREE.MeshPhongMaterial({color:0x1c2126,shininess:60});
+  const body=new THREE.Mesh(new THREE.SphereGeometry(1.05,12,10),red); body.scale.set(0.9,0.8,1.5); body.position.y=1.5; g.add(body);
+  const glass=new THREE.Mesh(new THREE.SphereGeometry(0.85,10,8),
+    new THREE.MeshPhongMaterial({color:0x9fd0e8,shininess:130,specular:0xffffff,transparent:true,opacity:0.55}));
+  glass.scale.set(0.75,0.62,0.8); glass.position.set(0,1.62,0.85); g.add(glass);
+  const boom=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.3,3.4,8),red); boom.rotation.x=Math.PI/2; boom.position.set(0,1.62,-2.5); g.add(boom);
+  const fin=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.9,0.55),red); fin.position.set(0,2.05,-4.1); g.add(fin);
+  const rotor=new THREE.Group(); rotor.position.set(0,2.55,0);
+  for(const a of [0,Math.PI/2]){ const bl=new THREE.Mesh(new THREE.BoxGeometry(7.4,0.05,0.32),dk); bl.rotation.y=a; rotor.add(bl); }
+  g.add(rotor); g.userData.rotor=rotor;
+  const tr=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.1,0.14),dk); tr.position.set(0.14,2.05,-4.15); g.add(tr); g.userData.tailRotor=tr;
+  const skidM=new THREE.MeshPhongMaterial({color:0x2c3540,shininess:50});
+  for(const sx of [-1,1]){ const skid=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,3.2,6),skidM);
+    skid.rotation.x=Math.PI/2; skid.position.set(sx*0.85,0.3,0.2); g.add(skid);
+    for(const sz of [-0.7,1.0]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.0,6),skidM); leg.position.set(sx*0.85,0.8,sz); g.add(leg); } }
+  g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
+  g.position.set(-150,1.0,-1562); scene.add(g); return g; })();
+{ const pad=new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.6,0.08,24),
+    new THREE.MeshLambertMaterial({map:canvasTex((g,s)=>{ g.fillStyle='#2d3640'; g.fillRect(0,0,s,s);
+      g.strokeStyle='#f2f2ee'; g.lineWidth=5; g.beginPath(); g.arc(s/2,s/2,s*0.4,0,6.283); g.stroke();
+      g.fillStyle='#f2f2ee'; g.font='bold 62px Helvetica,Arial'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('H',s/2,s/2+2); },128)}));
+  pad.position.set(-150,0.97,-1562); scene.add(pad); }
+function enterHeli(){ S.mode='heli'; S.pos.set(heli.position.x,0,heli.position.z); S.y=heli.position.y;
+  S.vel.set(0,0,0); S.vy=0; S.airborne=false;
+  player.grp.visible=false; player.board.visible=false; leash.visible=false;
+  flash('🚁 HOLD SPACE TO LIFT OFF — W TO FLY'); Aud.cue('combo'); }
+function exitHeli(){ const gY=Math.max(getWalkHeight(S.pos.x,S.pos.z), sampleWater(S.pos.x,S.pos.z,waterTime).y);
+  if(S.y-gY>3.5){ flash('LAND FIRST'); return; }
+  player.grp.visible=true; player.board.visible=true;
+  const onLand=getWalkHeight(S.pos.x,S.pos.z)>-0.85;
+  S.mode=onLand?'walk':'surf'; if(!onLand){ S.state='paddle'; reclaimBoard(); splashAt(S.pos.x,S.pos.z,0.8); }
+  S.vy=0; S.vel.set(0,0,0);
+  headingDir(dirVec); S.pos.x+=dirVec.z*2.6; S.pos.z+=-dirVec.x*2.6;
+  addCombo('FLEW THE CHOPPER',80); }
 function inCityStreets(){ const lz=S.pos.z+1600; return Math.abs(S.pos.x)<1040 && lz<18 && lz>-1040; }
 function enterCar(steal){ S.mode='car'; cabParked=false; cab.visible=true;
   player.grp.visible=false; player.board.visible=false;
@@ -1759,7 +1825,8 @@ function subwayAnnounce(){
   const ts=coneyInstance.getTrainStateFor(S.pos.x); if(!ts) return;
   const sts=coneyInstance.getSubwayStations(); if(!sts||!sts.length) return;
   if(ts.at!=null && subAt!==ts.at){ subAt=ts.at;
-    const st=sts.find(s=>Math.abs(s.x-ts.at)<2); if(st){ flash('🚇 THIS IS '+st.name); Aud.cue('chime'); } }
+    const st=sts.find(s=>Math.abs(s.x-ts.at)<2);
+    if(st){ flash('🚇 THIS IS '+st.name+(st.name.includes('STILLWELL')?' — TRANSFER TO D·F·N·Q':'')); Aud.cue('chime'); } }
   else if(ts.at==null && subAt!=null){ subAt=null;
     const ahead=sts.filter(s=>Math.sign(s.x-ts.x)===ts.dir).sort((a,b)=>ts.dir>0?a.x-b.x:b.x-a.x)[0];
     if(ahead) flash('NEXT STOP — '+ahead.name); }
@@ -1789,6 +1856,7 @@ function updateRidePrompt(){
 function interact(){
   if(!running) return;
   if(S.mode==='attraction'){ exitRide(); return; }
+  if(S.mode==='heli'){ exitHeli(); return; }
   if(S.mode==='car'){
     const r=nearestRide();                      // pull up at a station, hop straight on the train
     if(r&&r.name==='SUBWAY'){ exitCar(); boardRide(r); return; }
@@ -1874,7 +1942,7 @@ function physics(dt){
     S.heading += turn * 2.8 * dt;
     headingDir(dirVec);
     const walkVal = (keys.KeyW || keys.ArrowUp) ? 1 : ((keys.KeyS || keys.ArrowDown) ? -1 : 0);
-    const targetSp = walkVal * ((S.boostT||0)>0 ? 8.2 : 5.5);   // Nathan's hot dog legs
+    const targetSp = walkVal * ((S.boostT||0)>0 ? 10.5 : 7.6);  // jog by default, sprint on a Nathan's dog
     S.vel.x += (dirVec.x * targetSp - S.vel.x) * Math.min(1, dt * 8);
     S.vel.z += (dirVec.z * targetSp - S.vel.z) * Math.min(1, dt * 8);
     const prevX = S.pos.x, prevZ = S.pos.z;
@@ -1924,12 +1992,12 @@ function physics(dt){
     const sp0 = Math.hypot(S.vel.x, S.vel.z);
     S.heading += turn * 1.7 * dt * (0.3 + 0.7 * Math.min(1, sp0 / 12)) * (keys.Space ? 1.7 : 1);
     headingDir(dirVec);
-    if (keys.KeyW || keys.ArrowUp) { S.vel.x += dirVec.x * 26 * dt; S.vel.z += dirVec.z * 26 * dt; }
+    if (keys.KeyW || keys.ArrowUp) { S.vel.x += dirVec.x * 32 * dt; S.vel.z += dirVec.z * 32 * dt; }
     if (keys.KeyS || keys.ArrowDown) { S.vel.x *= (1 - 4.5 * dt); S.vel.z *= (1 - 4.5 * dt); }
     const sp = Math.hypot(S.vel.x, S.vel.z);
     const grip = keys.Space ? 0.9 : 6.5;                       // Space = handbrake slide
     if (sp > 0.01) { const g2 = Math.min(1, grip * dt); S.vel.x += (dirVec.x * sp - S.vel.x) * g2; S.vel.z += (dirVec.z * sp - S.vel.z) * g2; }
-    S.vel.x *= (1 - (0.5 + 0.012 * sp) * dt); S.vel.z *= (1 - (0.5 + 0.012 * sp) * dt);
+    S.vel.x *= (1 - (0.42 + 0.011 * sp) * dt); S.vel.z *= (1 - (0.42 + 0.011 * sp) * dt);
     const pX = S.pos.x, pZ = S.pos.z;
     S.pos.x += S.vel.x * dt; S.pos.z += S.vel.z * dt;
     const ty = getWalkHeight(S.pos.x, S.pos.z);
@@ -1938,6 +2006,25 @@ function physics(dt){
     S.carve = keys.Space ? Math.min(1, sp / 14) : 0;           // tire screech via carve hiss
     if (keys.Space && sp > 8 && Math.random() < dt * 24) { headingDir(dirVec);
       emitMist(S.pos.x - dirVec.x * 1.8, S.y + 0.3, S.pos.z - dirVec.z * 1.8, 0, rand(0.5, 1.2), 0, 1.2, 0.5, 0.16); }
+    S.catchOpen = false;
+    return;
+  }
+
+  /* -------- HELICOPTER -------- */
+  if (S.mode === 'heli') {
+    S.heading += turn * 1.5 * dt;
+    headingDir(dirVec);
+    const fwd = ((keys.KeyW||keys.ArrowUp)?1:0) - ((keys.KeyS||keys.ArrowDown)?0.65:0);
+    S.vel.x += dirVec.x * fwd * 24 * dt; S.vel.z += dirVec.z * fwd * 24 * dt;
+    S.vel.x *= (1 - 1.1 * dt); S.vel.z *= (1 - 1.1 * dt);
+    S.pos.x += S.vel.x * dt; S.pos.z += S.vel.z * dt;
+    const gY = Math.max(getWalkHeight(S.pos.x, S.pos.z), sampleWater(S.pos.x, S.pos.z, t).y);
+    if (keys.Space) S.vy += (8.5 - S.vy) * Math.min(1, dt * 2.5);   // collective up
+    else S.vy += (-4.5 - S.vy) * Math.min(1, dt * 1.6);             // brisk but soft descent
+    S.y += S.vy * dt;
+    if (S.y > 120) { S.y = 120; S.vy = Math.min(0, S.vy); }
+    if (S.y < gY + 1.0) { S.y = gY + 1.0; S.vy = Math.max(0, S.vy); }
+    S.jetLean += (turn * Math.min(1, Math.hypot(S.vel.x, S.vel.z) / 14) - S.jetLean) * Math.min(1, dt * 4);
     S.catchOpen = false;
     return;
   }
@@ -2158,8 +2245,8 @@ function placePlayer(dt,t){
     const sp = Math.hypot(S.vel.x, S.vel.z);
     const walkVal = (keys.KeyW || keys.ArrowUp) ? 1 : ((keys.KeyS || keys.ArrowDown) ? -1 : 0);
     if (walkVal !== 0) {
-      S.walkPhase = (S.walkPhase || 0) + dt * 10 * (sp / 5.5);
-      poseWalk(player.rig, S.walkPhase, sp / 5.5);
+      S.walkPhase = (S.walkPhase || 0) + dt * 10 * (sp / 7.6);
+      poseWalk(player.rig, S.walkPhase, Math.min(1.15, sp / 7.6));
     } else {
       S.walkPhase = 0;
       poseStand(player.rig);
@@ -2180,6 +2267,15 @@ function placePlayer(dt,t){
     cab.rotation.set(0, S.heading, 0);
     const sp = Math.hypot(S.vel.x, S.vel.z);
     cab.rotation.z = -S.jetLean * 0.06; cab.rotation.x = -Math.min(0.05, sp * 0.002);
+    syncBoard(dt, t); leash.visible = false;
+    return;
+  }
+  if (S.mode === 'heli') {
+    heli.position.set(S.pos.x, S.y, S.pos.z);
+    heli.rotation.set(0, S.heading, 0);
+    const hsp = Math.hypot(S.vel.x, S.vel.z);
+    heli.rotateX(Math.min(0.28, hsp * 0.012) * (((keys.KeyW||keys.ArrowUp)) ? 1 : 0.4));
+    heli.rotateZ(-S.jetLean * 0.3);
     syncBoard(dt, t); leash.visible = false;
     return;
   }
@@ -2285,6 +2381,7 @@ function updateCamera(dt){
   let back,up,ahead;
   if(S.mode==='attraction'){ back=12; up=4.2; ahead=9; }
   else if(S.mode==='car'){ back=9+sp*0.14; up=3.4; ahead=9; }
+  else if(S.mode==='heli'){ back=14+sp*0.12; up=5.5; ahead=11; }
   else if(S.mode==='walk'){ back=7; up=2.4; ahead=6; } else if(S.mode==='jetski'){ back=12+sp*0.16; up=5.5; ahead=10; }
   else if(S.state==='paddle'){ back=9; up=4.2; ahead=7; }
   else if(S.state==='wipeout'){ back=8; up=2.4; ahead=6; }
@@ -2318,7 +2415,15 @@ function applyEnv(){
 /* ===================== POSTPROCESSING: bloom + film grade ===================== */
 const _rts=new THREE.Vector2(); renderer.getDrawingBufferSize(_rts);
 const composer=new EffectComposer(renderer, new THREE.WebGLRenderTarget(_rts.x,_rts.y,{type:THREE.HalfFloatType,samples:4}));
-composer.addPass(new RenderPass(scene,camera));
+const renderPass=new RenderPass(scene,camera);
+composer.addPass(renderPass);
+/* SSAO: contact shadows between buildings — desktop only, engaged near the city */
+let ssaoPass=null;
+if(!IS_TOUCH && SSAOPass){ try{
+  ssaoPass=new SSAOPass(scene,camera,innerWidth,innerHeight);
+  ssaoPass.kernelRadius=10; ssaoPass.minDistance=0.0015; ssaoPass.maxDistance=0.12;
+  ssaoPass.enabled=false; composer.addPass(ssaoPass);
+}catch(e){ ssaoPass=null; } }
 const bloomPass=new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),0.42,0.55,0.85);
 composer.addPass(bloomPass);
 const GradeShader={
@@ -2354,8 +2459,8 @@ const LABEL={paddle:'PADDLE',ride:'RIDING',barrel:'BARREL',wipeout:'WIPEOUT',wal
 const COLOR={paddle:'#2a6f7a',ride:'#1f9e57',barrel:'#0e8ec9',wipeout:'#b8432e',walk:'#8e44ad'};
 function updateHUD(){
   elSpeed.innerHTML=`${Math.round(Math.hypot(S.vel.x,S.vel.z)*2.0)}<small> mph</small>`;
-  const lab = S.mode==='car' ? 'CAB 🚕' : (S.mode==='attraction' ? (S.ride?S.ride.name:'RIDE') : (S.mode==='walk' ? 'WALKING' : (S.mode==='jetski' ? 'JET SKI' : (LABEL[S.state]||S.state)))); elState.textContent=lab;
-  elState.style.background = S.mode==='car' ? '#b8860b' : (S.mode==='attraction' ? '#d35400' : (S.mode==='walk' ? '#8e44ad' : (S.mode==='jetski' ? '#c0392b' : (COLOR[S.state]||'#2a6f7a'))));
+  const lab = S.mode==='heli' ? 'HELI 🚁' : (S.mode==='car' ? 'CAB 🚕' : (S.mode==='attraction' ? (S.ride?S.ride.name:'RIDE') : (S.mode==='walk' ? 'WALKING' : (S.mode==='jetski' ? 'JET SKI' : (LABEL[S.state]||S.state))))); elState.textContent=lab;
+  elState.style.background = S.mode==='heli' ? '#16697e' : (S.mode==='car' ? '#b8860b' : (S.mode==='attraction' ? '#d35400' : (S.mode==='walk' ? '#8e44ad' : (S.mode==='jetski' ? '#c0392b' : (COLOR[S.state]||'#2a6f7a')))));
   elScore.textContent=Math.floor(score); elBest.textContent=bestRide.toFixed(1)+'s'; elBTube.textContent=bestTube.toFixed(1)+'s';
   const bars=Math.round(curSetAmp*5); elSet.textContent=curSetAmp<0.12?'lull':'▮'.repeat(bars)+'▯'.repeat(5-bars);
   const sb=Math.min(5,Math.round((S.style||0)/20));
@@ -2402,6 +2507,11 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
   if(window.__coneyReady&&lbT===0) coneyInstance.setMood(moodF);
   updateFireworks(); for(const p of FW_POOLS) p.update(dt);
   updateWildlife(dt,waterTime);
+  heli.userData.rotor.rotation.y += dt*(S.mode==='heli'?28:2.2);
+  heli.userData.tailRotor.rotation.x += dt*(S.mode==='heli'?42:3);
+  if(ssaoPass){ const aoOn = qLevel===0 && Math.hypot(focus.x,focus.z+1600)<900;
+    ssaoPass.enabled=aoOn; renderPass.enabled=!aoOn; }
+  for(const gd of GLOW_DOMES) gd.material.opacity=moodF*0.13;
   if(S.boostT>0) S.boostT-=dt;
   if(S.flowT>0) S.flowT-=dt;
   S.style=Math.max(0,(S.style||0)-dt*3.5);
@@ -2414,7 +2524,7 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
     roar=(1-clamp((Math.hypot(ax-px,az-pz)-30)/260,0,1))*wv.amp; }
   Aud.update(dt,{ set:curSetAmp, spd01:clamp(sp/30,0,1), roar,
     carve:((S.state==='ride'&&!S.airborne)?S.carve*clamp(sp/22,0,1):0)+((S.mode==='jetski'&&sp>13)?0.3:0)+((S.state==='barrel'&&(keys.KeyD||keys.ArrowRight))?0.22:0),
-    tube:S.barreled?1:(S.state==='barrel'?0.32:0), jet:S.mode==='jetski', air:S.airborne, under:underT });
+    tube:S.barreled?1:(S.state==='barrel'?0.32:0), jet:S.mode==='jetski'||S.mode==='car'||S.mode==='heli', air:S.airborne, under:underT });
   gullCryT-=dt; if(gullCryT<=0){ gullCryT=rand(7,16);
     for(const b of gulls){ if(b.g.position.distanceTo(camera.position)<260){ Aud.cue('gull'); break; } } }
 

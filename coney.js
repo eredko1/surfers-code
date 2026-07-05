@@ -171,15 +171,20 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
 
       function createWindowTexture() {
         const canvas = document.createElement("canvas");
-        canvas.width = 128;
-        canvas.height = 256;
+        canvas.width = 256;
+        canvas.height = 512;
         const ctx = canvas.getContext("2d");
-        // Subtle gradient base
-        const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        g.addColorStop(0, "#e8edf3");
-        g.addColorStop(1, "#cdd6df");
+        ctx.scale(2, 2);
+        // Facade gradient with baked ground-level ambient occlusion
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, "#eef2f6");
+        g.addColorStop(0.8, "#c9d2db");
+        g.addColorStop(1, "#9aa3ac");
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, 128, 256);
+        // grime streaks
+        for (let i = 0; i < 26; i++) { ctx.fillStyle = "rgba(70,80,90," + (0.03 + Math.random() * 0.05).toFixed(2) + ")";
+          const x = Math.random() * 128; ctx.fillRect(x, Math.random() * 40, 1 + Math.random() * 2, 60 + Math.random() * 190); }
         // Window grid
         const ww = 20, wh = 30, gx = 15, gy = 20;
         const cols = Math.floor((canvas.width - gx) / (ww + gx));
@@ -192,11 +197,21 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           for (let c = 0; c < cols; c++) {
             const x = ox + gx + c * (ww + gx);
             const y = oy + gy + r * (wh + gy);
-            // Random window tints — some warm-lit (rare)
-            const lit = Math.random() < 0.06;
-            ctx.fillStyle = lit ? "#fce28a" : "#dfeaf5";
+            // Sky-reflecting glass with depth, AC units, and warm-lit rooms
+            const lit = Math.random() < 0.1;
+            const wg = ctx.createLinearGradient(x, y, x, y + wh);
+            if (lit) { wg.addColorStop(0, "#ffe9a8"); wg.addColorStop(1, "#e8b968"); }
+            else { const sh = 0.75 + Math.random() * 0.35;
+              wg.addColorStop(0, "rgba(" + (150 * sh | 0) + "," + (175 * sh | 0) + "," + (205 * sh | 0) + ",1)");
+              wg.addColorStop(1, "rgba(" + (95 * sh | 0) + "," + (115 * sh | 0) + "," + (140 * sh | 0) + ",1)"); }
+            ctx.fillStyle = wg;
             ctx.fillRect(x, y, ww, wh);
-            ctx.strokeStyle = "rgba(40,55,75,0.18)";
+            ctx.fillStyle = "rgba(255,255,255,0.28)";       // glass glint
+            ctx.fillRect(x + 2, y + 2, ww - 4, 3);
+            ctx.fillStyle = "rgba(30,40,55,0.35)";          // sill shadow
+            ctx.fillRect(x, y + wh - 2, ww, 2);
+            if (Math.random() < 0.12) { ctx.fillStyle = "#b9bfc4"; ctx.fillRect(x + ww / 2 - 4, y + wh - 6, 8, 5); } // AC unit
+            ctx.strokeStyle = "rgba(40,55,75,0.3)";
             ctx.strokeRect(x + 0.5, y + 0.5, ww - 1, wh - 1);
           }
         }
@@ -616,6 +631,35 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         });
         const trainCarGeom = new THREE.BoxGeometry(12, 3, 2.5);
         const pillarGeom = new THREE.CylinderGeometry(1.2, 1.2, 1, 10);
+        /* R68-style stainless car sides: corrugation, window band, door pairs, orange F bullet */
+        const trainSideTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+          const g = c.getContext('2d');
+          const bg = g.createLinearGradient(0, 0, 0, 128);
+          bg.addColorStop(0, '#dde5ee'); bg.addColorStop(0.5, '#b8c2cd'); bg.addColorStop(1, '#929ca7');
+          g.fillStyle = bg; g.fillRect(0, 0, 512, 128);
+          for (let y = 8; y < 128; y += 9) { g.fillStyle = 'rgba(255,255,255,0.16)'; g.fillRect(0, y, 512, 2);
+            g.fillStyle = 'rgba(60,70,80,0.14)'; g.fillRect(0, y + 2, 512, 1); }
+          g.fillStyle = '#16222e'; g.fillRect(0, 28, 512, 34);
+          for (let x = 14; x < 470, x < 512 - 44; x += 64) { g.fillStyle = '#31465c'; g.fillRect(x, 32, 42, 26);
+            g.fillStyle = 'rgba(200,225,255,0.3)'; g.fillRect(x + 2, 34, 38, 6); }
+          for (const dx of [128, 320]) { g.fillStyle = '#8b95a0'; g.fillRect(dx, 20, 4, 90); g.fillRect(dx + 44, 20, 4, 90);
+            g.fillStyle = '#22303c'; g.fillRect(dx + 18, 30, 12, 62); }
+          g.fillStyle = '#ff6319'; g.beginPath(); g.arc(486, 92, 14, 0, 6.283); g.fill();
+          g.fillStyle = '#fff'; g.font = 'bold 20px Helvetica,Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('F', 486, 93);
+          const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; })();
+        /* windows-only emissive map so cars glow warm from inside at night */
+        const trainGlowTex = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+          const g = c.getContext('2d'); g.fillStyle = '#000'; g.fillRect(0, 0, 512, 128);
+          for (let x = 14; x < 512 - 44; x += 64) { g.fillStyle = '#ffdf9e'; g.fillRect(x, 32, 42, 26); }
+          for (const dx of [128, 320]) { g.fillStyle = '#ffe7b0'; g.fillRect(dx + 18, 30, 12, 62); }
+          const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+        const trainSideMat = new THREE.MeshStandardMaterial({ map: trainSideTex, metalness: 0.5, roughness: 0.38,
+          emissive: 0xffedb8, emissiveMap: trainGlowTex, emissiveIntensity: 0 });
+        trainSideMat.userData.nightGlow = 0.95;   // survives the Lambert conversion via userData
+        const bogGeom = new THREE.BoxGeometry(2.2, 0.8, 1.9);
+        const bogMat = new THREE.MeshStandardMaterial({ color: 0x22262b, roughness: 0.9 });
+        const trainEndMat = new THREE.MeshStandardMaterial({ color: 0x9aa4ae, metalness: 0.55, roughness: 0.42 });
+        const trainCarMats = [trainEndMat, trainEndMat, trainEndMat, trainEndMat, trainSideMat, trainSideMat];
 
         for (let i = 0; i < count && i < configs.length; i++) {
           const cfg = configs[i];
@@ -687,12 +731,15 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
               const roof = new THREE.Mesh(new THREE.BoxGeometry(pw + 5, rh, pd + 2), stationRoofMat);
               roof.position.set(sx, trackYPos + rh / 2 + 1.5, cfg.position.z + pd / 2 + 2.5);
               roof.castShadow = true; group.add(roof);
-              if (st.terminal) {   // Stillwell's famous long train shed
-                const shed = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, pw + 14, 12, 1, true, 0, Math.PI),
-                  new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide }));
-                shed.rotation.z = Math.PI / 2; shed.position.set(sx, trackYPos + 6, cfg.position.z + 2);
-                group.add(shed);
-              }
+              const edge = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.07, 0.55),   // yellow tactile platform edge
+                new THREE.MeshStandardMaterial({ color: 0xf7c948, roughness: 0.6 }));
+              edge.position.set(sx, trackYPos - 0.46, cfg.position.z + 3.0);
+              group.add(edge);
+              const benchM = new THREE.MeshStandardMaterial({ color: 0x5a3d22, roughness: 0.85 });
+              for (const bx of [-pw / 4, pw / 4]) {
+                const bench = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.5, 0.8), benchM);
+                bench.position.set(sx + bx, trackYPos - 0.2, cfg.position.z + pd / 2 + 6.5);
+                group.add(bench); }
               const signMat = new THREE.MeshBasicMaterial({ map: mkStationSign(st) });
               for (const dz of [-1, 1]) {
                 const sign = new THREE.Mesh(new THREE.PlaneGeometry(12, 2.2), signMat);
@@ -706,6 +753,88 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
               for (let ci = 0; ci < 6; ci++) { cm.setPosition(sx - pw / 2 + (ci + 0.5) * (pw / 6), trackYPos + rh / 2 - 1, cfg.position.z + pd / 2 + 2.5);
                 cols.setMatrixAt(ci, cm); }
               group.add(cols);
+
+              /* ---- shared authentic furniture: hunter-green windscreens w/ ad posters, stairs to street ---- */
+              const green = new THREE.MeshStandardMaterial({ color: 0x1e4d3b, metalness: 0.35, roughness: 0.6 });
+              const adTex = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+                const g2 = c.getContext('2d'); const cols2 = ['#e8503a', '#2a7fd4', '#f2b430'];
+                for (let k = 0; k < 3; k++) { g2.fillStyle = '#f4f1ea'; g2.fillRect(k * 86 + 4, 4, 78, 56);
+                  g2.fillStyle = cols2[k]; g2.fillRect(k * 86 + 8, 8, 70, 34);
+                  g2.fillStyle = '#333'; g2.fillRect(k * 86 + 8, 46, 70, 4); g2.fillRect(k * 86 + 8, 53, 50, 3); }
+                const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+              const screen = new THREE.Mesh(new THREE.BoxGeometry(pw * 0.6, 2.4, 0.15), green);
+              screen.position.set(sx, trackYPos + 0.75, cfg.position.z + pd / 2 + 9.4); group.add(screen);
+              const ads = new THREE.Mesh(new THREE.PlaneGeometry(pw * 0.55, 1.7), new THREE.MeshBasicMaterial({ map: adTex }));
+              ads.rotation.y = Math.PI; ads.position.set(sx, trackYPos + 0.8, cfg.position.z + pd / 2 + 9.3); group.add(ads);
+              { const gY = groundMesh.position.y + terrainAmp + 0.1;  // stairway to the street
+                const steps = 20, rise = (trackYPos - 1 - gY) / steps, runZ = 0.95;
+                for (let si2 = 0; si2 < steps; si2++) {
+                  const stp = new THREE.Mesh(new THREE.BoxGeometry(3, rise, runZ + 0.15), stationMat);
+                  stp.position.set(sx + pw / 2 + 2, gY + rise * (si2 + 0.5), cfg.position.z + pd / 2 + 2.5 + (steps - si2) * runZ);
+                  group.add(stp); }
+                const runL = steps * runZ;
+                for (const rx of [-1.6, 1.6]) { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.0, Math.hypot(runL, trackYPos - 1 - gY)), green);
+                  rail.position.set(sx + pw / 2 + 2 + rx, gY + (trackYPos - 1 - gY) * 0.55 + 0.5, cfg.position.z + pd / 2 + 2.5 + runL * 0.5);
+                  rail.rotation.x = Math.atan2(trackYPos - 1 - gY, runL); group.add(rail); } }
+
+              /* ---- per-station signatures ---- */
+              if (st.name.includes('STILLWELL')) {
+                // glass barrel-vault train shed with white ribs
+                const shed = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, pw + 18, 14, 1, true, 0, Math.PI),
+                  new THREE.MeshStandardMaterial({ color: 0xcfe4ee, roughness: 0.25, metalness: 0.15,
+                    transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+                shed.rotation.z = Math.PI / 2; shed.position.set(sx, trackYPos + 5.5, cfg.position.z + 2);
+                group.add(shed);
+                for (let ri = 0; ri <= 6; ri++) { const rib = new THREE.Mesh(new THREE.TorusGeometry(15, 0.18, 6, 18, Math.PI),
+                    new THREE.MeshStandardMaterial({ color: 0xe8ebe6, roughness: 0.5, metalness: 0.3 }));
+                  rib.rotation.y = Math.PI / 2; rib.position.set(sx - (pw + 18) / 2 + ri * (pw + 18) / 6, trackYPos + 5.5, cfg.position.z + 2);
+                  group.add(rib); }
+                // cream-brick terminal headhouse with the big arch + name band
+                const hh = new THREE.Mesh(new THREE.BoxGeometry(30, 12, 8),
+                  new THREE.MeshStandardMaterial({ color: 0xe3cf9e, roughness: 0.85 }));
+                hh.position.set(sx, groundMesh.position.y + terrainAmp + 6, cfg.position.z + pd / 2 + 16); group.add(hh);
+                const arch = new THREE.Mesh(new THREE.TorusGeometry(4.6, 0.7, 8, 16, Math.PI),
+                  new THREE.MeshStandardMaterial({ color: 0x8a7a5a, roughness: 0.8 }));
+                arch.position.set(sx, groundMesh.position.y + terrainAmp + 4.5, cfg.position.z + pd / 2 + 20.1); group.add(arch);
+                const nb = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 64;
+                  const g2 = c.getContext('2d'); g2.fillStyle = '#233c2e'; g2.fillRect(0, 0, 512, 64);
+                  g2.fillStyle = '#f2ead6'; g2.font = 'bold 30px Georgia,serif'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+                  g2.fillText('CONEY ISLAND — STILLWELL AVENUE TERMINAL', 256, 33);
+                  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+                const band = new THREE.Mesh(new THREE.PlaneGeometry(28, 3.2), new THREE.MeshBasicMaterial({ map: nb }));
+                band.position.set(sx, groundMesh.position.y + terrainAmp + 10.2, cfg.position.z + pd / 2 + 20.05); group.add(band);
+                // second island platform (it's an 8-track terminal)
+                const p2 = new THREE.Mesh(new THREE.BoxGeometry(pw, 1, pd * 0.7), stationMat);
+                p2.position.set(sx, trackYPos - 1, cfg.position.z - pd * 0.55); p2.receiveShadow = true; group.add(p2);
+              } else if (st.name.includes('AQUARIUM')) {
+                // W 8 St: stacked second deck + the curved white screen + footbridge toward the beach
+                const deck2 = new THREE.Mesh(new THREE.BoxGeometry(pw, 1, pd * 0.8), stationMat);
+                deck2.position.set(sx, trackYPos + 5.5, cfg.position.z + pd / 2 + 2.5); group.add(deck2);
+                const curve = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, pw, 16, 1, true, Math.PI * 0.15, Math.PI * 0.7),
+                  new THREE.MeshStandardMaterial({ color: 0xe8eaea, roughness: 0.55, metalness: 0.2,
+                    transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+                curve.rotation.z = Math.PI / 2; curve.position.set(sx, trackYPos + 3, cfg.position.z - 3.5); group.add(curve);
+                const bridge = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.5, 46), stationMat);
+                bridge.position.set(sx, trackYPos - 1, cfg.position.z + pd / 2 + 26); group.add(bridge);
+                for (const bx of [-1.7, 1.7]) { const br2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 46), green);
+                  br2.position.set(sx + bx, trackYPos - 0.2, cfg.position.z + pd / 2 + 26); group.add(br2); }
+              } else if (st.name.includes('OCEAN')) {
+                // Ocean Pkwy: concrete viaduct — parapet walls + arched spandrels
+                const conc = new THREE.MeshStandardMaterial({ color: 0xd3cdc0, roughness: 0.9 });
+                for (const dz of [-1, 1]) { const parapet = new THREE.Mesh(new THREE.BoxGeometry(pw + 8, 1.6, 0.5), conc);
+                  parapet.position.set(sx, trackYPos + 0.3, cfg.position.z + dz * 3.4); group.add(parapet); }
+                for (let ai = 0; ai < 4; ai++) { const archV = new THREE.Mesh(new THREE.TorusGeometry(4.2, 1.0, 6, 12, Math.PI), conc);
+                  archV.position.set(sx - 22 + ai * 15, groundMesh.position.y + terrainAmp + 4.4, cfg.position.z);
+                  group.add(archV); }
+              } else {
+                // Brighton Beach: dark-steel el — lattice girders under the platform
+                const steel = new THREE.MeshStandardMaterial({ color: 0x2e3d33, metalness: 0.5, roughness: 0.55 });
+                const girder = new THREE.Mesh(new THREE.BoxGeometry(pw + 6, 1.4, 0.4), steel);
+                girder.position.set(sx, trackYPos - 2.2, cfg.position.z + 2.8); group.add(girder);
+                for (let li = 0; li < 10; li++) { const diag = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.4, 0.22), steel);
+                  diag.position.set(sx - (pw + 6) / 2 + li * (pw + 6) / 9, trackYPos - 2.2, cfg.position.z + 2.8);
+                  diag.rotation.z = (li % 2 ? 1 : -1) * 0.7; group.add(diag); }
+              }
             }
           }
 
@@ -717,10 +846,14 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
             const train = new THREE.Group();
             train.userData = { isTrain: true, numCars: NUM_CARS_PER_TRAIN };
             for (let j = 0; j < NUM_CARS_PER_TRAIN; j++) {
-              const car = new THREE.Mesh(trainCarGeom, trainMat);
+              const car = new THREE.Mesh(trainCarGeom, trainCarMats);
               car.position.x = j * -13;
               car.castShadow = true;
               train.add(car);
+              for (const bx of [-3.6, 3.6]) {                       // undercarriage bogies
+                const bog = new THREE.Mesh(bogGeom, bogMat);
+                bog.position.set(car.position.x + bx, -1.85, 0);
+                train.add(bog); }
             }
             const startX = cfg.position.x + (k === 0 ? -cfg.length / 2 : cfg.length / 2);
             train.position.set(startX, trackYPos + 1.5 + 0.75, cfg.position.z);
@@ -1588,6 +1721,25 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           leg.castShadow = true;
           wheelG.add(leg);
         });
+        // steel X-bracing between the legs — real Wonder Wheel lattice
+        {
+          const braceMat = supportMat;
+          const braceFromTo = (a, b) => {
+            const dv = new THREE.Vector3().subVectors(b, a);
+            const br = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, dv.length(), 5), braceMat);
+            br.position.copy(a).addScaledVector(dv, 0.5);
+            br.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.clone().normalize());
+            wheelG.add(br);
+          };
+          for (let i = 0; i < legPositions.length; i++) {
+            const [ax, , az] = legPositions[i];
+            const [bx, , bz] = legPositions[(i + 1) % legPositions.length];
+            for (const [f1, f2] of [[0.1, 0.45], [0.45, 0.1], [0.45, 0.8], [0.8, 0.45]]) {
+              braceFromTo(new THREE.Vector3(ax * (1 - f1 * 0.6), towerH * f1, az * (1 - f1 * 0.6)),
+                          new THREE.Vector3(bx * (1 - f2 * 0.6), towerH * f2, bz * (1 - f2 * 0.6)));
+            }
+          }
+        }
 
         // Hub
         const hub = new THREE.Mesh(
@@ -6055,12 +6207,32 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         const g = new THREE.Group();
         const dashGeom = new THREE.PlaneGeometry(0.2, 2.5);
         const walkGeom = new THREE.PlaneGeometry(0.6, streetWidth - 2);
+        const sideMat = new THREE.MeshStandardMaterial({ color: 0xbdbdb4, roughness: 0.82 });
+        const curbMat = new THREE.MeshStandardMaterial({ color: 0x9d9d96, roughness: 0.75 });
+        /* sidewalks + curbs along the E-W streets */
+        scene.traverse((o) => { if (!o.userData?.isEWStreet) return;
+          for (const dz of [-1, 1]) {
+            const sw = new THREE.Mesh(new THREE.PlaneGeometry(gridLength, 2.6), sideMat);
+            sw.rotation.x = -Math.PI / 2;
+            sw.position.set(o.position.x, y + 0.005, o.position.z + dz * (streetWidth / 2 + 1.3));
+            sw.receiveShadow = true; g.add(sw);
+            const curb = new THREE.Mesh(new THREE.BoxGeometry(gridLength, 0.14, 0.24), curbMat);
+            curb.position.set(o.position.x, y + 0.07, o.position.z + dz * (streetWidth / 2 + 0.12));
+            g.add(curb); } });
         for (let s = 0; s < 12; s++) {
           const sx = buildingAreaMinX + 50 + s * 100;
           const ave = new THREE.Mesh(new THREE.PlaneGeometry(streetWidth, aveLen), aveMat);
           ave.rotation.x = -Math.PI / 2;
           ave.position.set(sx, y, buildingAreaMinZ + aveLen / 2);
           ave.receiveShadow = true; g.add(ave);
+          for (const dx of [-1, 1]) {                              // avenue sidewalks + curbs
+            const sw = new THREE.Mesh(new THREE.PlaneGeometry(2.6, aveLen), sideMat);
+            sw.rotation.x = -Math.PI / 2;
+            sw.position.set(sx + dx * (streetWidth / 2 + 1.3), y + 0.004, buildingAreaMinZ + aveLen / 2);
+            sw.receiveShadow = true; g.add(sw);
+            const curb = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.14, aveLen), curbMat);
+            curb.position.set(sx + dx * (streetWidth / 2 + 0.12), y + 0.07, buildingAreaMinZ + aveLen / 2);
+            g.add(curb); }
           const nd = Math.floor(aveLen / 7);
           const dashes = new THREE.InstancedMesh(dashGeom, dashMat, nd);
           const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
@@ -12428,7 +12600,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       () => createVehicles(settings.numBuses, settings.numVehicles),
       () => createTreesAndBushes(400, groundSize, groundMesh.position.y + terrainAmp),
       () => createParkArea({ x: -180, z: -120 }),
-      () => { estimatedPopulation = 480; createPeople(estimatedPopulation); },   // lighter crowd, same life
+      () => { estimatedPopulation = 300; createPeople(estimatedPopulation); },   // light crowd — easy on the GPU
       () => generateBuildings(settings.numBuildings),
       buildAvenues,
       () => { const rideGroup = new THREE.Group();
@@ -12522,11 +12694,14 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
 
   let moodMats = null;
   function setMood(f){   // 0 = day … 1 = night: boardwalk bulbs blaze, apartment windows glow
-    if (!moodMats) { moodMats = { bulb: [], win: [] };
+    if (!moodMats) { moodMats = { bulb: [], win: [], glow: [] };
       bulbMeshes.forEach(b => { if (b.material) moodMats.bulb.push(b.material); });
       buildingGroup.traverse(o => { if (o.isMesh && o.material && o.material.map && !moodMats.win.includes(o.material)) moodMats.win.push(o.material); });
+      subwayGroup.traverse(o => { const ms = Array.isArray(o.material) ? o.material : [o.material];
+        ms.forEach(m => { if (m && m.userData && m.userData.nightGlow != null && !moodMats.glow.includes(m)) moodMats.glow.push(m); }); });
     }
     moodMats.bulb.forEach(m => { m.emissiveIntensity = 0.4 + 2.4 * f; });
+    moodMats.glow.forEach(m => { m.emissiveIntensity = m.userData.nightGlow * f; });
     moodMats.win.forEach(m => { if (!m.emissiveMap) { m.emissiveMap = m.map; m.emissive = new THREE.Color(0xffe9b0); m.needsUpdate = true; }
       m.emissiveIntensity = 0.75 * f; });
   }
