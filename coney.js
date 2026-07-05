@@ -651,24 +651,62 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           pillars.instanceMatrix.needsUpdate = true;
           group.add(pillars);
 
-          // Optional Stations
-          if (cfg.addStations) {
-            const pw = 50, pd = 14, rw = 55, rd = 16, rh = 5;
-            const platformGeom = new THREE.BoxGeometry(pw, 1, pd);
-            const roofGeom = new THREE.BoxGeometry(rw, rh, rd);
-            [-0.4, -0.2, 0, 0.2, 0.4].forEach((pct) => {
-              const relX = cfg.length * pct;
-              const sx = cfg.position.x + relX;
-              const platform = new THREE.Mesh(platformGeom, stationMat);
+          // Stations — line 0 gets the real Brighton/Culver line stops with MTA signage
+          if (cfg.addStations && i === 0) {
+            const stops = [
+              { name: 'CONEY ISLAND–STILLWELL AV', x: -600, bullets: [['D','#ff6319'],['F','#ff6319'],['N','#fccc0a'],['Q','#fccc0a']], terminal: true },
+              { name: 'W 8 ST–NY AQUARIUM',        x: -200, bullets: [['F','#ff6319'],['Q','#fccc0a']] },
+              { name: 'OCEAN PKWY',                x:  150, bullets: [['Q','#fccc0a']] },
+              { name: 'BRIGHTON BEACH',            x:  550, bullets: [['B','#ff6319'],['Q','#fccc0a']] },
+            ];
+            subwayStations = stops.map(s => ({ name: s.name, x: cfg.position.x + s.x, z: cfg.position.z }));
+            const mkStationSign = (st) => {
+              const c = document.createElement('canvas'); c.width = 512; c.height = 96;
+              const g = c.getContext('2d');
+              g.fillStyle = '#0f0f0f'; g.fillRect(0, 0, 512, 96);
+              g.fillStyle = '#fff'; g.fillRect(0, 6, 512, 3);
+              g.font = 'bold 34px Helvetica,Arial,sans-serif'; g.fillStyle = '#fff';
+              g.textAlign = 'left'; g.textBaseline = 'middle';
+              g.fillText(st.name, 16, 52);
+              let bx = 500 - st.bullets.length * 42;
+              for (const [ltr, col] of st.bullets) {
+                g.fillStyle = col; g.beginPath(); g.arc(bx + 18, 52, 18, 0, 6.283); g.fill();
+                g.fillStyle = (col === '#fccc0a') ? '#000' : '#fff';
+                g.font = 'bold 26px Helvetica,Arial,sans-serif'; g.textAlign = 'center';
+                g.fillText(ltr, bx + 18, 53); g.textAlign = 'left';
+                g.font = 'bold 34px Helvetica,Arial,sans-serif'; bx += 42;
+              }
+              const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+            };
+            for (const st of stops) {
+              const sx = cfg.position.x + st.x;
+              const pw = st.terminal ? 78 : 52, pd = 14, rh = 5;
+              const platform = new THREE.Mesh(new THREE.BoxGeometry(pw, 1, pd), stationMat);
               platform.position.set(sx, trackYPos - 1, cfg.position.z + pd / 2 + 2.5);
-              platform.castShadow = true;
-              platform.receiveShadow = true;
-              group.add(platform);
-              const roof = new THREE.Mesh(roofGeom, stationRoofMat);
+              platform.castShadow = true; platform.receiveShadow = true; group.add(platform);
+              const roof = new THREE.Mesh(new THREE.BoxGeometry(pw + 5, rh, pd + 2), stationRoofMat);
               roof.position.set(sx, trackYPos + rh / 2 + 1.5, cfg.position.z + pd / 2 + 2.5);
-              roof.castShadow = true;
-              group.add(roof);
-            });
+              roof.castShadow = true; group.add(roof);
+              if (st.terminal) {   // Stillwell's famous long train shed
+                const shed = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, pw + 14, 12, 1, true, 0, Math.PI),
+                  new THREE.MeshStandardMaterial({ color: 0x9aa7ad, roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide }));
+                shed.rotation.z = Math.PI / 2; shed.position.set(sx, trackYPos + 6, cfg.position.z + 2);
+                group.add(shed);
+              }
+              const signMat = new THREE.MeshBasicMaterial({ map: mkStationSign(st) });
+              for (const dz of [-1, 1]) {
+                const sign = new THREE.Mesh(new THREE.PlaneGeometry(12, 2.2), signMat);
+                sign.position.set(sx, trackYPos + 3.6, cfg.position.z + pd / 2 + 2.5 + dz * (pd / 2 - 0.5));
+                if (dz < 0) sign.rotation.y = Math.PI;
+                group.add(sign);
+              }
+              const cols = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.16, rh + 2, 6),
+                new THREE.MeshStandardMaterial({ color: 0x2a4a3a, roughness: 0.7 }), 6);
+              const cm = new THREE.Matrix4();
+              for (let ci = 0; ci < 6; ci++) { cm.setPosition(sx - pw / 2 + (ci + 0.5) * (pw / 6), trackYPos + rh / 2 - 1, cfg.position.z + pd / 2 + 2.5);
+                cols.setMatrixAt(ci, cm); }
+              group.add(cols);
+            }
           }
 
           subwayGroup.add(group);
@@ -692,6 +730,8 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
               speed: (k === 0 ? 1.5 : -1.5) * (Math.random() * 0.2 + 0.9),
               trackLength: cfg.length,
               trackCenterX: cfg.position.x,
+              stations: (i === 0 && subwayStations.length) ? subwayStations.map(s => s.x) : null,
+              dwell: 0, lastStop: null, atStation: null,
             });
           }
         }
@@ -2381,6 +2421,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       const carouselsAnim = []; // {root, horses[], rotSpeed, horseAmp}
       const steamPlumes = [];   // {points, posAttr, base, lifeSecs, count, scale}
       const pigeonsArr = [];    // {mesh, theta, r, baseY, speed}
+      let subwayStations = []; // real Brighton/Culver line stops on line 0
       const trafficLightSets = []; // {red, yellow, green, phase, period}
       const sidewalkPeople = []; // {inst, idx, x, y, z, speed, dirX}
       let sidewalkPersonInst = null;
@@ -11831,15 +11872,27 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         });
       }
 
-      function animateTrains() {
+      function animateTrains(delta) {
         trains.forEach((t) => {
-          t.mesh.position.x += t.speed;
+          if (t.dwell > 0) { t.dwell -= (delta || 0.016); return; }   // doors open at the platform
+          let f = 1;
+          if (t.stations) {
+            let nd = 1e9, nx = 0;
+            for (const sx of t.stations) { const d = Math.abs(t.mesh.position.x - sx); if (d < nd) { nd = d; nx = sx; } }
+            if (nd < 30 && (Math.sign(nx - t.mesh.position.x) === Math.sign(t.speed) || nd < 2)) {
+              f = Math.max(0.12, nd / 30);                            // brake into the station
+              if (nd < 1.6 && t.lastStop !== nx) { t.dwell = 2.6; t.lastStop = nx; t.atStation = nx; return; }
+            }
+            if (nd > 6) t.atStation = null;
+            if (t.lastStop != null && Math.abs(t.mesh.position.x - t.lastStop) > 40) t.lastStop = null;
+          }
+          t.mesh.position.x += t.speed * f;
           const half = t.trackLength / 2;
           const buf = 30;
           if (t.speed > 0 && t.mesh.position.x - t.trackCenterX > half + buf) {
-            t.mesh.position.x = t.trackCenterX - half - buf;
+            t.mesh.position.x = t.trackCenterX - half - buf; t.lastStop = null;
           } else if (t.speed < 0 && t.mesh.position.x - t.trackCenterX < -half - buf) {
-            t.mesh.position.x = t.trackCenterX + half + buf;
+            t.mesh.position.x = t.trackCenterX + half + buf; t.lastStop = null;
           }
         });
       }
@@ -12337,7 +12390,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       () => createVehicles(settings.numBuses, settings.numVehicles),
       () => createTreesAndBushes(400, groundSize, groundMesh.position.y + terrainAmp),
       () => createParkArea({ x: -180, z: -120 }),
-      () => { estimatedPopulation = 800; createPeople(estimatedPopulation); },
+      () => { estimatedPopulation = 480; createPeople(estimatedPopulation); },   // lighter crowd, same life
       () => generateBuildings(settings.numBuildings),
       () => { const rideGroup = new THREE.Group();
         rideGroup.position.set(0, groundMesh.position.y + terrainAmp + 0.5, 15);
@@ -12369,7 +12422,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
   }
 
   function updateConey(dt, t) {
-    animateTrains();
+    animateTrains(dt);
     animateRides(t);
     animateCarousels(t, dt);
     animateSteam(dt, t);
@@ -12400,11 +12453,45 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     return out;
   }
 
+  function getSubwayStations(){ return subwayStations; }
+  function getTrainState(){ const t = trains[0]; if (!t) return null;
+    return { x: t.mesh.position.x, z: t.mesh.position.z, dwell: t.dwell || 0, dir: Math.sign(t.speed), at: t.atStation }; }
+
+  /* everything that moves — excluded from static-geometry merging */
+  function getDynamicRoots(){
+    const roots = [subwayGroup, vehicleGroup, peopleGroup, wheelMesh, cycloneTrain, thunderboltCar,
+      dropTowerRide, spinningRide, swingRideTop, simpleFerrisWheel, pirateShipRide, parachuteWarningLight];
+    carouselsAnim.forEach(c => roots.push(c.rotor));
+    trains.forEach(t => roots.push(t.mesh));
+    for (const arr of [helicopters, seagulls]) arr.forEach(h => { for (const v of Object.values(h)) if (v && v.isObject3D) roots.push(v); });
+    pigeonsArr.forEach(p => { if (p.mesh) roots.push(p.mesh); });
+    wavingFlags.forEach(f => { if (f.mesh) roots.push(f.mesh); });
+    clouds.forEach(c => { if (c.mesh) roots.push(c.mesh); });
+    weatherObjects.forEach(w => { if (w && w.isObject3D) roots.push(w); });
+    bulbMeshes.forEach(b => roots.push(b));
+    return roots.filter(Boolean);
+  }
+
+  let moodMats = null;
+  function setMood(f){   // 0 = day … 1 = night: boardwalk bulbs blaze, apartment windows glow
+    if (!moodMats) { moodMats = { bulb: [], win: [] };
+      bulbMeshes.forEach(b => { if (b.material) moodMats.bulb.push(b.material); });
+      buildingGroup.traverse(o => { if (o.isMesh && o.material && o.material.map && !moodMats.win.includes(o.material)) moodMats.win.push(o.material); });
+    }
+    moodMats.bulb.forEach(m => { m.emissiveIntensity = 0.4 + 2.4 * f; });
+    moodMats.win.forEach(m => { if (!m.emissiveMap) { m.emissiveMap = m.map; m.emissive = new THREE.Color(0xffe9b0); m.needsUpdate = true; }
+      m.emissiveIntensity = 0.75 * f; });
+  }
+
   return {
     build: buildConey,
     update: updateConey,
     getPeople: () => people,
     getRideables,
+    getSubwayStations,
+    getTrainState,
+    getDynamicRoots,
+    setMood,
     getTerrainHeight
   };
 }

@@ -8,9 +8,13 @@ Surf the tropical reef breaks, then jet-ski north: Coney Island materializes out
 
 - **Catch the Coney Island Break** (`B` cycles to it, or hit the CONEY ISLAND button on the title screen) — it peels right toward the sand.
 - **Ride all the way in.** When your board touches the shallows you step off automatically and just keep walking up the beach — no button needed.
-- **Walk mode** (`G`, or the WALK button on phones): stroll the sand, up onto the boardwalk, into the streets. Locals chat with you when you get close.
-- **Wade back into the water** and you're automatically paddling again. Your board or jet ski stays floating where you left it — walk back and press `G` to remount.
-- **Golden hour** (`K`): the rides and boardwalk bulbs glow against the sunset.
+- **Ride the rides** — Wonder Wheel, Cyclone (hands up!), Carousel, all in first person (`C` for third person). Hop off anywhere.
+- **Take the subway** — real Brighton line stops: Coney Island–Stillwell Av, W 8 St–NY Aquarium, Ocean Pkwy, Brighton Beach. Trains brake into the platforms, doors chime, stops are announced.
+- **Carnival**: play ring toss on the boardwalk (time your throws!) and win a plushie; grab a Nathan's Famous hot dog for a speed boost.
+- **Jack a cab** GTA-style on the city streets — `G` near a road, drive with `W`, handbrake-drift with `Space`, park and walk away.
+- **Night** (`K` cycles midday → golden hour → night): stars come out, apartment windows and ride bulbs glow, and a synchronized **fireworks show** bursts over the water — everyone in your room sees the same show.
+- **Wildlife**: crabs on the sand, sea turtles cruising the island shallows (they dive if you get close), flying fish bursting past your jet ski.
+- **Style system**: cutbacks and snaps are scored by name; vary your tricks to fill the style meter and enter FLOW for 2× points.
 
 ## Controls
 
