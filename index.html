@@ -1661,14 +1661,18 @@ function nearestRide(){
   if(!RIDEABLES && window.__coneyReady && coneyInstance) RIDEABLES=coneyInstance.getRideables();
   if(!RIDEABLES) return null;
   let best=null, bd=1e9;
-  for(const r of RIDEABLES){ let gx,gz;
-    if(r.gateLocal){ gx=r.gateLocal.x; gz=r.gateLocal.z-1600; }
-    else { r.gate.getWorldPosition(_rideV); gx=_rideV.x; gz=_rideV.z; }
-    const d=Math.hypot(S.pos.x-gx,S.pos.z-gz)-r.gr;
+  for(const r of RIDEABLES){
+    let d=1e9;
+    if(r.gates){ for(const g of r.gates) d=Math.min(d, Math.hypot(S.pos.x-g.x, S.pos.z-(g.z-1600))-r.gr); }
+    else if(r.gateLocal){ d=Math.hypot(S.pos.x-r.gateLocal.x, S.pos.z-(r.gateLocal.z-1600))-r.gr; }
+    else { r.gate.getWorldPosition(_rideV); d=Math.hypot(S.pos.x-_rideV.x, S.pos.z-_rideV.z)-r.gr; }
     if(d<bd){ bd=d; best=r; } }
   return bd<9 ? best : null;
 }
 function boardRide(r){
+  if(r.seats){ let bd=1e9;                    // subway: hop on whichever train is closest
+    for(const s of r.seats){ s.getWorldPosition(_rideV); const d=Math.hypot(_rideV.x-S.pos.x,_rideV.z-S.pos.z);
+      if(d<bd){ bd=d; r.seat=s; } } }
   r.seat.updateWorldMatrix(true,false); _rideV.copy(r.off); r.seat.localToWorld(_rideV);
   S.mode='attraction'; S.ride=r;
   S.pos.set(_rideV.x,0,_rideV.z); S.y=_rideV.y; S.vel.set(0,0,0); S.vy=0; S.airborne=false;
@@ -1752,7 +1756,7 @@ function exitCar(){ S.mode='walk'; cabParked=true;
 let subAt=null;
 function subwayAnnounce(){
   if(!(S.mode==='attraction'&&S.ride&&S.ride.name==='SUBWAY'&&coneyInstance&&window.__coneyReady)){ subAt=null; return; }
-  const ts=coneyInstance.getTrainState(); if(!ts) return;
+  const ts=coneyInstance.getTrainStateFor(S.pos.x); if(!ts) return;
   const sts=coneyInstance.getSubwayStations(); if(!sts||!sts.length) return;
   if(ts.at!=null && subAt!==ts.at){ subAt=ts.at;
     const st=sts.find(s=>Math.abs(s.x-ts.at)<2); if(st){ flash('🚇 THIS IS '+st.name); Aud.cue('chime'); } }
@@ -1766,7 +1770,9 @@ function updateRidePrompt(){
   subwayAnnounce();
   const el=document.getElementById('ridePrompt');
   let label=null, sub=null;
-  if(running && S.mode==='walk' && !RT.on){
+  if(running && S.mode==='car'){ const r=nearestRide();
+    if(r&&r.name==='SUBWAY'){ label='🚇 SUBWAY STATION'; sub='catch the train'; } }
+  else if(running && S.mode==='walk' && !RT.on){
     if(cabParked && Math.hypot(S.pos.x-cab.position.x,S.pos.z-cab.position.z)<5){ label='🚕 YOUR CAB'; sub='drive'; }
     else { const it=nearestInteractable();
       if(it){ label=it.icon+' '+it.name; sub=it.name==='RING TOSS'?'play':'grab a dog'; }
@@ -1783,7 +1789,10 @@ function updateRidePrompt(){
 function interact(){
   if(!running) return;
   if(S.mode==='attraction'){ exitRide(); return; }
-  if(S.mode==='car'){ exitCar(); return; }
+  if(S.mode==='car'){
+    const r=nearestRide();                      // pull up at a station, hop straight on the train
+    if(r&&r.name==='SUBWAY'){ exitCar(); boardRide(r); return; }
+    exitCar(); return; }
   if(S.mode==='walk'){
     if(cabParked && Math.hypot(S.pos.x-cab.position.x,S.pos.z-cab.position.z)<5){ enterCar(false); return; }
     const it=nearestInteractable(); if(it){ it.act(); return; }
@@ -2457,7 +2466,7 @@ window.__ais=()=>ais.map(a=>({x:a.grp.position.x,z:a.grp.position.z,st:a.state})
 window.__mp=MP; window.__mpRecv=mpRecv; window.__keys=keys;
 window.__walk=toggleWalk; window.__coney=teleportToConey; window.__walkH=getWalkHeight;
 window.__interact=interact; window.__rides=()=>{ if(!RIDEABLES&&coneyInstance&&window.__coneyReady) RIDEABLES=coneyInstance.getRideables(); return RIDEABLES; };
-window.__boardRide=boardRide;
+window.__boardRide=boardRide; window.__ci=()=>coneyInstance;
 window.__info=()=>({calls:renderer.info.render.calls,tris:renderer.info.render.triangles});
 </script>
 </body>

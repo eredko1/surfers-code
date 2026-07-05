@@ -84,11 +84,11 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       const settings = {
         timeOfDay: 50,
         weather: "sunny",
-        numBuildings: 800,
+        numBuildings: 880,
         numSubwayLines: 4,
         numHighways: 1,
-        numBuses: 100,
-        numVehicles: 350,
+        numBuses: 130,
+        numVehicles: 520,
       };
 
       const moveState = {
@@ -1309,7 +1309,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         for (let i = 0; i < numBuildings; i++) {
           const t = Math.random();
           let h, w, d, bucket, color;
-          if (t < 0.15) {
+          if (t < 0.3) {
             h = Math.random() * 10 + 8;
             w = Math.random() * 8 + 8;
             d = Math.random() * 8 + 8;
@@ -6045,6 +6045,44 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       /* ----------------------------------------------------------------
        *  Street markings — dashed center lines, painted bike lanes
        * ---------------------------------------------------------------- */
+      /* N-S avenues completing the street grid (the same lines the building generator avoids) */
+      function buildAvenues() {
+        const y = streetLevelY + 0.03;
+        const aveLen = maxBuildingZ - buildingAreaMinZ;
+        const aveMat = new THREE.MeshStandardMaterial({ color: 0x464c54, roughness: 0.88 });
+        const dashMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.55 });
+        const walkMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e2, roughness: 0.6 });
+        const g = new THREE.Group();
+        const dashGeom = new THREE.PlaneGeometry(0.2, 2.5);
+        const walkGeom = new THREE.PlaneGeometry(0.6, streetWidth - 2);
+        for (let s = 0; s < 12; s++) {
+          const sx = buildingAreaMinX + 50 + s * 100;
+          const ave = new THREE.Mesh(new THREE.PlaneGeometry(streetWidth, aveLen), aveMat);
+          ave.rotation.x = -Math.PI / 2;
+          ave.position.set(sx, y, buildingAreaMinZ + aveLen / 2);
+          ave.receiveShadow = true; g.add(ave);
+          const nd = Math.floor(aveLen / 7);
+          const dashes = new THREE.InstancedMesh(dashGeom, dashMat, nd);
+          const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+          q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+          for (let i = 0; i < nd; i++) { v.set(sx, y + 0.02, buildingAreaMinZ + 3 + i * 7); m4.compose(v, q, sv); dashes.setMatrixAt(i, m4); }
+          g.add(dashes);
+          // crosswalks where avenues meet the E-W streets
+          for (let e = 0; e < 12; e++) {
+            const ez = maxBuildingZ - 20 - e * gridSpacingZ;
+            if (ez < buildingAreaMinZ) break;
+            for (let w2 = 0; w2 < 5; w2++) {
+              const stripe = new THREE.Mesh(walkGeom, walkMat);
+              stripe.rotation.x = -Math.PI / 2;
+              stripe.position.set(sx - 2.4 + w2 * 1.2, y + 0.025, ez + gridSpacingZ * 0);
+              stripe.position.z = ez + streetWidth / 2 + 1.2;
+              g.add(stripe);
+            }
+          }
+        }
+        scene.add(g);
+      }
+
       function buildStreetMarkings() {
         const baseY = groundMesh.position.y + terrainAmp + 0.06;
         const ewStreets = [];
@@ -11886,7 +11924,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
             if (nd > 6) t.atStation = null;
             if (t.lastStop != null && Math.abs(t.mesh.position.x - t.lastStop) > 40) t.lastStop = null;
           }
-          t.mesh.position.x += t.speed * f;
+          t.mesh.position.x += t.speed * f * ((delta || 0.016) * 60);   // dt-based: consistent at any framerate
           const half = t.trackLength / 2;
           const buf = 30;
           if (t.speed > 0 && t.mesh.position.x - t.trackCenterX > half + buf) {
@@ -12392,6 +12430,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       () => createParkArea({ x: -180, z: -120 }),
       () => { estimatedPopulation = 480; createPeople(estimatedPopulation); },   // lighter crowd, same life
       () => generateBuildings(settings.numBuildings),
+      buildAvenues,
       () => { const rideGroup = new THREE.Group();
         rideGroup.position.set(0, groundMesh.position.y + terrainAmp + 0.5, 15);
         parentGroup.add(rideGroup); buildRides(rideGroup); },
@@ -12449,8 +12488,17 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     if (carouselsAnim.length && carouselsAnim[0].horses.length)
       out.push({ name: 'CAROUSEL', seat: carouselsAnim[0].horses[0].horse, off: new THREE.Vector3(0, 0.55, 0), gate: carouselsAnim[0].rotor, gr: 14 });
     if (trains.length) out.push({ name: 'SUBWAY', seat: trains[0].mesh, off: new THREE.Vector3(0, 1.55, 0),
-      gateLocal: { x: trains[0].trackCenterX, z: trains[0].mesh.position.z }, gr: 26 });
+      seats: trains.slice(0, 2).map(t => t.mesh),
+      gates: subwayStations.map(s => ({ x: s.x, z: s.z })), gr: 26,
+      gateLocal: { x: trains[0].trackCenterX, z: trains[0].mesh.position.z } });
     return out;
+  }
+  function getTrainStateFor(px) {
+    let best = null, bd = 1e9;
+    for (const t of trains.slice(0, 2)) { const d = Math.abs(t.mesh.position.x - px);
+      if (d < bd) { bd = d; best = t; } }
+    if (!best) return null;
+    return { x: best.mesh.position.x, z: best.mesh.position.z, dwell: best.dwell || 0, dir: Math.sign(best.speed), at: best.atStation };
   }
 
   function getSubwayStations(){ return subwayStations; }
@@ -12490,6 +12538,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     getRideables,
     getSubwayStations,
     getTrainState,
+    getTrainStateFor,
     getDynamicRoots,
     setMood,
     getTerrainHeight
