@@ -84,7 +84,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       const settings = {
         timeOfDay: 50,
         weather: "sunny",
-        numBuildings: 880,
+        numBuildings: 520,
         numSubwayLines: 4,
         numHighways: 1,
         numBuses: 130,
@@ -116,7 +116,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       const terrainAmp = 1.5;
       const groundSize = 2400;
       const maxBuildingZ = -80;
-      const buildingAreaMinZ = -groundSize * 0.4;
+      const buildingAreaMinZ = -groundSize * 0.3;   // fewer distant blocks — the near city carries the look
       const buildingAreaSpread = groundSize * 0.8;
       const buildingAreaMinX = -buildingAreaSpread / 2;
       const buildingAreaMaxX = buildingAreaSpread / 2;
@@ -1358,20 +1358,24 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
 
         const personHeight = 1.8;
         // low-poly humanoid (torso + legs + arms merged), heads separate so they keep skin tones
-        const torso = new THREE.CapsuleGeometry(0.24, 0.55, 4, 8); torso.translate(0, 1.08, 0);
-        const legL = new THREE.CapsuleGeometry(0.085, 0.6, 3, 6);  legL.translate(-0.115, 0.42, 0);
-        const legR = legL.clone();                                  legR.translate(0.23, 0, 0);
-        const armL = new THREE.CapsuleGeometry(0.065, 0.48, 3, 6);
-        armL.rotateZ(0.14); armL.translate(-0.34, 1.02, 0);
-        const armR = new THREE.CapsuleGeometry(0.065, 0.48, 3, 6);
-        armR.rotateZ(-0.14); armR.translate(0.34, 1.02, 0);
-        const geom = mergeGeometries([torso, legL, legR, armL, armR]);
+        /* slimmer GTA-ish proportions; shirt / pants / head are separate instanced meshes for real clothing */
+        const torso = new THREE.CapsuleGeometry(0.19, 0.52, 4, 8); torso.translate(0, 1.14, 0);
+        const armL = new THREE.CapsuleGeometry(0.05, 0.52, 3, 6);
+        armL.rotateZ(0.12); armL.translate(-0.28, 1.05, 0);
+        const armR = new THREE.CapsuleGeometry(0.05, 0.52, 3, 6);
+        armR.rotateZ(-0.12); armR.translate(0.28, 1.05, 0);
+        const geom = mergeGeometries([torso, armL, armR]);
+        const legL = new THREE.CapsuleGeometry(0.075, 0.68, 3, 6); legL.translate(-0.1, 0.45, 0);
+        const legR = legL.clone();                                  legR.translate(0.2, 0, 0);
+        const legsGeom = mergeGeometries([legL, legR]);
         const matBase = new THREE.MeshStandardMaterial({ roughness: 0.85 });
         const inst = new THREE.InstancedMesh(geom, matBase, count);
         inst.castShadow = true;
         inst.instanceColor = new THREE.InstancedBufferAttribute(
           new Float32Array(count * 3), 3
         );
+        const legsInst = new THREE.InstancedMesh(legsGeom, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count);
+        legsInst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
         const headGeom = new THREE.SphereGeometry(0.155, 10, 8); headGeom.translate(0, 1.6, 0);
         const headInst = new THREE.InstancedMesh(headGeom, new THREE.MeshStandardMaterial({ roughness: 0.7 }), count);
         headInst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
@@ -1398,8 +1402,14 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           m4.compose(v, q, s);
           inst.setMatrixAt(i, m4);
           headInst.setMatrixAt(i, m4);
-          col.setHSL(Math.random(), 0.6, 0.42 + Math.random() * 0.25);  // bright boardwalk outfits
+          legsInst.setMatrixAt(i, m4);
+          col.setHSL(Math.random(), 0.45 + Math.random() * 0.3, 0.35 + Math.random() * 0.3);  // shirts
           inst.setColorAt(i, col);
+          const pr = Math.random();  // pants: denim / khaki / black / grey
+          if (pr < 0.45) col.setHSL(0.6, 0.45, 0.2 + Math.random() * 0.15);
+          else if (pr < 0.65) col.setHSL(0.1, 0.3, 0.4 + Math.random() * 0.15);
+          else col.setHSL(0, 0, 0.1 + Math.random() * 0.25);
+          legsInst.setColorAt(i, col);
           col.setHSL(0.07 + Math.random() * 0.02, 0.45 + Math.random() * 0.2, 0.28 + Math.random() * 0.42);
           headInst.setColorAt(i, col);
           people.push({
@@ -1413,9 +1423,12 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
         headInst.instanceMatrix.needsUpdate = true;
         if (headInst.instanceColor) headInst.instanceColor.needsUpdate = true;
-        peopleGroup.add(inst); peopleGroup.add(headInst);
+        legsInst.instanceMatrix.needsUpdate = true;
+        if (legsInst.instanceColor) legsInst.instanceColor.needsUpdate = true;
+        peopleGroup.add(inst); peopleGroup.add(headInst); peopleGroup.add(legsInst);
         peopleGroup.userData.inst = inst;
         peopleGroup.userData.head = headInst;
+        peopleGroup.userData.legs = legsInst;
       }
 
       /* ============================================================
@@ -1594,6 +1607,24 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         buildInstanced(apartmentsTan, apartmentTanMat);
         buildInstanced(cafes, cafeMat);
         buildInstanced(brownstones, brownstoneMat);
+        /* NYC rooftop water towers on the taller buildings */
+        { const all = [...apartmentsBrick, ...apartmentsTan, ...brownstones].filter(b => b.h > 16);
+          const picks = all.filter((_, i) => i % 3 === 0);
+          if (picks.length) {
+            const tank = new THREE.CylinderGeometry(1.5, 1.7, 2.6, 10); tank.translate(0, 1.3, 0);
+            const roofc = new THREE.ConeGeometry(1.75, 1.1, 10); roofc.translate(0, 3.1, 0);
+            const parts = [tank, roofc];
+            for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+              const l = new THREE.CylinderGeometry(0.09, 0.09, 1.8, 5); l.translate(lx * 1.05, -0.9, lz * 1.05); parts.push(l); }
+            const towerGeom = mergeGeometries(parts);
+            const towerInst = new THREE.InstancedMesh(towerGeom,
+              new THREE.MeshStandardMaterial({ color: 0x6b5236, roughness: 0.85 }), picks.length);
+            const tm = new THREE.Matrix4();
+            picks.forEach((b, i) => { tm.makeRotationY(Math.random() * 6.28);
+              tm.setPosition(b.x + (Math.random() - 0.5) * b.w * 0.3, b.y + b.h / 2 + 0.9, b.z + (Math.random() - 0.5) * b.d * 0.3);
+              towerInst.setMatrixAt(i, tm); });
+            towerInst.castShadow = true; buildingGroup.add(towerInst); }
+        }
 
         // expose merged apartment list for rooftop decoration
         const apartments = apartmentsBrick.concat(apartmentsTan);
@@ -2573,6 +2604,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       const carouselsAnim = []; // {root, horses[], rotSpeed, horseAmp}
       const steamPlumes = [];   // {points, posAttr, base, lifeSecs, count, scale}
       const pigeonsArr = [];    // {mesh, theta, r, baseY, speed}
+      const aquaSharks = [], aquaSeals = [];
       let subwayStations = []; // real Brighton/Culver line stops on line 0
       const trafficLightSets = []; // {red, yellow, green, phase, period}
       const sidewalkPeople = []; // {inst, idx, x, y, z, speed, dirX}
@@ -12180,9 +12212,12 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           _peopleM.compose(_peopleV, _peopleQ, _peopleS);
           inst.setMatrixAt(p.idx, _peopleM);
           if (head) head.setMatrixAt(p.idx, _peopleM);
+          const legs = peopleGroup.userData.legs;
+          if (legs) legs.setMatrixAt(p.idx, _peopleM);
         });
         inst.instanceMatrix.needsUpdate = true;
         if (head) head.instanceMatrix.needsUpdate = true;
+        if (peopleGroup.userData.legs) peopleGroup.userData.legs.instanceMatrix.needsUpdate = true;
       }
 
       function animateCarousels(t, delta) {
@@ -12600,7 +12635,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       () => createVehicles(settings.numBuses, settings.numVehicles),
       () => createTreesAndBushes(400, groundSize, groundMesh.position.y + terrainAmp),
       () => createParkArea({ x: -180, z: -120 }),
-      () => { estimatedPopulation = 300; createPeople(estimatedPopulation); },   // light crowd — easy on the GPU
+      () => { estimatedPopulation = 160; createPeople(estimatedPopulation); },   // sparse, realistic crowd
       () => generateBuildings(settings.numBuildings),
       buildAvenues,
       () => { const rideGroup = new THREE.Group();
@@ -12618,6 +12653,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       createPigeons,
       buildConeyIslandHouses,
       buildVerrazzanoBridge,
+      buildAquarium,
       () => upgradeMCUPark(parentGroup),
     ];
     let si = 0;
@@ -12647,6 +12683,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     animateWavingFlags(t);
     animateHelicopters(t, dt);
     animatePeople(dt);
+    animateAquarium(t);
   }
 
   /* Attractions the player can ride: seat = animated node to attach to (world transform includes
@@ -12673,6 +12710,94 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     return { x: best.mesh.position.x, z: best.mesh.position.z, dwell: best.dwell || 0, dir: Math.sign(best.speed), at: best.atStation };
   }
 
+  /* NEW YORK AQUARIUM at the W 8 St footbridge — shark tunnel + seal pool */
+  function buildAquarium(){
+    const g = new THREE.Group(); scene.add(g);
+    const baseY = groundMesh.position.y + terrainAmp + 0.1;
+    const cx = -200, cz = -16;
+    const teal = new THREE.MeshStandardMaterial({ color: 0x1f6f8a, roughness: 0.6 });
+    const main = new THREE.Mesh(new THREE.BoxGeometry(46, 9, 22), teal);
+    main.position.set(cx, baseY + 4.5, cz); main.castShadow = true; g.add(main);
+    const wave = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 46, 14, 1, true, 0, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0x2a8aa8, roughness: 0.5, side: THREE.DoubleSide }));
+    wave.rotation.z = Math.PI / 2; wave.position.set(cx, baseY + 9, cz); g.add(wave);
+    const nb = (() => { const c = document.createElement('canvas'); c.width = 512; c.height = 64;
+      const s = c.getContext('2d'); s.fillStyle = '#0b3c4e'; s.fillRect(0, 0, 512, 64);
+      s.fillStyle = '#8fe0f2'; s.font = 'bold 34px Helvetica,Arial'; s.textAlign = 'center'; s.textBaseline = 'middle';
+      s.fillText('NEW YORK AQUARIUM', 256, 33);
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const band = new THREE.Mesh(new THREE.PlaneGeometry(30, 3.4), new THREE.MeshBasicMaterial({ map: nb }));
+    band.position.set(cx, baseY + 7.6, cz + 11.05); g.add(band);
+    const tun = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 26, 12, 1, true, 0, Math.PI),
+      new THREE.MeshStandardMaterial({ color: 0x2fa3c8, roughness: 0.15, metalness: 0.1,
+        transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+    tun.rotation.z = Math.PI / 2; tun.position.set(cx, baseY + 0.2, cz + 18); g.add(tun);
+    const sharkM = new THREE.MeshStandardMaterial({ color: 0x5a6c78, roughness: 0.5 });
+    for (let i = 0; i < 3; i++) { const sh2 = new THREE.Group();
+      const b2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 1.6, 4, 8), sharkM); b2.rotation.x = Math.PI / 2; sh2.add(b2);
+      const fin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 4), sharkM); fin.scale.set(0.3, 1, 1); fin.position.y = 0.5; sh2.add(fin);
+      const tail = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.8, 4), sharkM); tail.scale.set(0.25, 1, 1); tail.rotation.x = -Math.PI / 2; tail.position.z = -1.5; sh2.add(tail);
+      g.add(sh2); aquaSharks.push({ m: sh2, cx, cy: baseY + 2.4, cz: cz + 18, ph: i * 2.1 }); }
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 0.8, 18),
+      new THREE.MeshStandardMaterial({ color: 0x2a8fae, roughness: 0.25 }));
+    pool.position.set(cx - 30, baseY + 0.4, cz + 14); g.add(pool);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(6, 0.4, 8, 18),
+      new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.8 }));
+    rim.rotation.x = Math.PI / 2; rim.position.set(cx - 30, baseY + 0.8, cz + 14); g.add(rim);
+    const sealM = new THREE.MeshStandardMaterial({ color: 0x4a4038, roughness: 0.6 });
+    for (let i = 0; i < 2; i++) { const se = new THREE.Group();
+      const b3 = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.9, 4, 8), sealM); b3.rotation.x = Math.PI / 2 - 0.3; se.add(b3);
+      const h3 = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), sealM); h3.position.set(0, 0.45, 0.5); se.add(h3);
+      g.add(se); aquaSeals.push({ m: se, cx: cx - 30, cy: baseY + 0.85, cz: cz + 14, ph: i * 3 }); }
+  }
+  function animateAquarium(t){
+    for (const s of aquaSharks) { const a = t * 0.5 + s.ph;
+      s.m.position.set(s.cx + Math.cos(a) * 9, s.cy + Math.sin(t * 0.8 + s.ph) * 0.4, s.cz + Math.sin(a) * 1.4);
+      s.m.rotation.y = Math.atan2(-Math.sin(a) * 9, Math.cos(a) * 1.4); }
+    for (const s of aquaSeals) { const a = t * 0.4 + s.ph;
+      s.m.position.set(s.cx + Math.cos(a) * 3.4, s.cy + Math.abs(Math.sin(t * 1.2 + s.ph)) * 0.25, s.cz + Math.sin(a) * 3.4);
+      s.m.rotation.y = -a + Math.PI / 2; }
+  }
+
+  /* Real Verrazzano-Narrows: twin portal towers, double deck, catenary cables + suspenders
+     (overrides the earlier simple builder via declaration hoisting) */
+  function buildVerrazzanoBridge(){
+    const g = new THREE.Group(); g.position.set(-1450, 0, 200); g.rotation.y = -0.35; scene.add(g);
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa2a8, metalness: 0.45, roughness: 0.55 });
+    const cableM = new THREE.MeshStandardMaterial({ color: 0x3c4248, metalness: 0.7, roughness: 0.35 });
+    const deckM = new THREE.MeshStandardMaterial({ color: 0x565e66, roughness: 0.8 });
+    const span = 720, towerH = 100, deckY = 24, sag = 56, side = 170;
+    for (const tx of [-span / 2, span / 2]) {
+      for (const tz of [-7, 7]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(5, towerH, 5), steel);
+        leg.position.set(tx, towerH / 2, tz); g.add(leg); }
+      for (const hy of [towerH * 0.55, towerH * 0.8, towerH * 0.98]) {
+        const cross = new THREE.Mesh(new THREE.BoxGeometry(6, 4.5, 19), steel); cross.position.set(tx, hy, 0); g.add(cross); }
+    }
+    for (const dy of [0, -6]) { const deck = new THREE.Mesh(new THREE.BoxGeometry(span + side * 2, 2.2, 16), deckM);
+      deck.position.set(0, deckY + dy, 0); g.add(deck); }
+    for (let i = 0; i < 42; i++) { const x = -(span + side * 2) / 2 + i * ((span + side * 2) / 41);
+      for (const pz of [-7, 7]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6, 0.5), steel);
+        post.position.set(x, deckY - 3, pz); g.add(post); } }
+    for (const cz2 of [-7.5, 7.5]) {
+      let prev = null;
+      for (let i = 0; i <= 56; i++) { const x = -(span / 2 + side) + i * ((span + side * 2) / 56);
+        const ax = Math.abs(x); let y;
+        if (ax <= span / 2) { const u = x / (span / 2); y = towerH - 2 - sag * (1 - u * u); }
+        else { const f = (ax - span / 2) / side; y = (towerH - 2) * (1 - f) + (deckY + 2) * f; }
+        const p = new THREE.Vector3(x, y, cz2);
+        if (prev) { const dv = new THREE.Vector3().subVectors(p, prev);
+          const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, dv.length(), 6), cableM);
+          seg.position.copy(prev).addScaledVector(dv, 0.5);
+          seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.clone().normalize()); g.add(seg); }
+        prev = p; }
+      for (let i = 1; i < 28; i++) { const x = -span / 2 + i * (span / 28); const u = x / (span / 2);
+        const top = towerH - 2 - sag * (1 - u * u); const len = top - (deckY + 1);
+        if (len > 1.5) { const sus = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, len, 4), cableM);
+          sus.position.set(x, deckY + 1 + len / 2, cz2); g.add(sus); } }
+    }
+    g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  }
+
   function getSubwayStations(){ return subwayStations; }
   function getTrainState(){ const t = trains[0]; if (!t) return null;
     return { x: t.mesh.position.x, z: t.mesh.position.z, dwell: t.dwell || 0, dir: Math.sign(t.speed), at: t.atStation }; }
@@ -12685,6 +12810,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
     trains.forEach(t => roots.push(t.mesh));
     for (const arr of [helicopters, seagulls]) arr.forEach(h => { for (const v of Object.values(h)) if (v && v.isObject3D) roots.push(v); });
     pigeonsArr.forEach(p => { if (p.mesh) roots.push(p.mesh); });
+    aquaSharks.forEach(s => roots.push(s.m)); aquaSeals.forEach(s => roots.push(s.m));
     wavingFlags.forEach(f => { if (f.mesh) roots.push(f.mesh); });
     clouds.forEach(c => { if (c.mesh) roots.push(c.mesh); });
     weatherObjects.forEach(w => { if (w && w.isObject3D) roots.push(w); });

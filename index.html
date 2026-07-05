@@ -169,7 +169,7 @@
   <div id="rt"><div id="rtZone"></div><div id="rtMark"></div></div>
   <div id="help" class="panel">
     <div><kbd>W</kbd> paddle/pump · <kbd>A</kbd><kbd>D</kbd> carve/stall/spin · <kbd>Space</kbd> pop up · air (hold = grab) · <kbd>S</kbd> slow / kick out</div>
-    <div><kbd>J</kbd> jet ski · <kbd>G</kbd> walk / ride the rides · <kbd>B</kbd> next break · <kbd>T</kbd> auto-catch · <kbd>C</kbd> camera · <kbd>K</kbd> golden hour · <kbd>M</kbd> sound · <kbd>R</kbd> reset</div>
+    <div><kbd>J</kbd> jet ski · <kbd>G</kbd> walk / ride / drive / fly · <kbd>B</kbd> next break · <kbd>1</kbd> race <kbd>2</kbd> tag · <kbd>K</kbd> day/night · <kbd>M</kbd> sound · <kbd>R</kbd> reset</div>
   </div>
   <div id="compass" class="panel"><canvas id="radar" width="150" height="150"></canvas>reef break: <b id="reefdir">→</b> <span id="reefdist"></span></div>
   <div id="lb" class="panel"><div class="hd" id="lbHead"></div><div id="lbRows"></div></div>
@@ -826,26 +826,28 @@ function makeRig(look){
   const J={}, group=new THREE.Group();
   function seg(name,parent,px,py,pz){ const g=new THREE.Group(); g.position.set(px,py,pz); parent.add(g); J[name]=g; return g; }
   function cap(r,len,mat,dir=-1){ const m=new THREE.Mesh(new THREE.CapsuleGeometry(r,Math.max(0.02,len-2*r),3,8),mat); m.position.y=dir*len/2; return m; }
+  /* GTA-ish athletic proportions: slimmer limbs, smaller head, natural shoulder width */
   const hips=seg('hips',group,0,1.34,0);
-  hips.add(cap(0.30,0.42,suit,1));
-  const spine=seg('spine',hips,0,0.16,0);   spine.add(cap(0.30,0.48,suit,1));
-  const chest=seg('chest',spine,0,0.44,0);  chest.add(cap(0.335,0.62,suit,1));
-  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.10),accent); stripe.position.set(0,0.30,0.30); chest.add(stripe);
-  const neck=seg('neck',chest,0,0.60,0);    neck.add(cap(0.11,0.16,skin,1));
+  hips.add(cap(0.235,0.40,suit,1));
+  const spine=seg('spine',hips,0,0.16,0);   spine.add(cap(0.235,0.46,suit,1));
+  const chest=seg('chest',spine,0,0.44,0);  chest.add(cap(0.26,0.60,suit,1));
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.3,0.08),accent); stripe.position.set(0,0.28,0.235); chest.add(stripe);
+  const neck=seg('neck',chest,0,0.60,0);    neck.add(cap(0.085,0.15,skin,1));
   const head=seg('head',neck,0,0.14,0);
-  const skull=new THREE.Mesh(new THREE.SphereGeometry(0.315,14,12),skin); skull.position.y=0.24; head.add(skull);
-  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.335,12,9,0,6.29,0,1.75),hairM); hair.position.set(0,0.30,-0.03); head.add(hair);
+  const skull=new THREE.Mesh(new THREE.SphereGeometry(0.245,14,12),skin); skull.position.y=0.2; head.add(skull);
+  skull.scale.set(0.92,1.08,0.98);
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.26,12,9,0,6.29,0,1.75),hairM); hair.position.set(0,0.25,-0.025); head.add(hair);
   const eyeM=new THREE.MeshBasicMaterial({color:0x1a1410});
-  for(const sx of [-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(0.042,7,6),eyeM); e.position.set(sx*0.115,0.27,0.265); head.add(e); }
-  const zinc=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.05,0.10),new THREE.MeshLambertMaterial({color:0xf3f7f4})); zinc.position.set(0,0.20,0.30); head.add(zinc);
+  for(const sx of [-1,1]){ const e=new THREE.Mesh(new THREE.SphereGeometry(0.034,7,6),eyeM); e.position.set(sx*0.09,0.22,0.205); head.add(e); }
+  const zinc=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.04,0.08),new THREE.MeshLambertMaterial({color:0xf3f7f4})); zinc.position.set(0,0.16,0.235); head.add(zinc);
   for(const [sd,sx] of [['L',-1],['R',1]]){
-    const sh=seg('sh'+sd,chest,sx*0.44,0.48,0); sh.add(cap(0.125,0.50,suit));
-    const el=seg('el'+sd,sh,0,-0.50,0); el.add(cap(0.105,0.46,accent));
-    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.115,8,7),skin); hand.position.y=-0.52; el.add(hand); J['hand'+sd]=hand;
-    const hip=seg('hip'+sd,hips,sx*0.195,-0.12,0); hip.add(cap(0.165,0.62,suit));
-    const knee=seg('knee'+sd,hip,0,-0.62,0); knee.add(cap(0.135,0.60,skin));
+    const sh=seg('sh'+sd,chest,sx*0.37,0.48,0); sh.add(cap(0.095,0.52,suit));
+    const el=seg('el'+sd,sh,0,-0.52,0); el.add(cap(0.08,0.48,accent));
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.09,8,7),skin); hand.position.y=-0.53; el.add(hand); J['hand'+sd]=hand;
+    const hip=seg('hip'+sd,hips,sx*0.16,-0.12,0); hip.add(cap(0.125,0.64,suit));
+    const knee=seg('knee'+sd,hip,0,-0.64,0); knee.add(cap(0.10,0.6,skin));
     const ank=seg('ank'+sd,knee,0,-0.60,0);
-    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.10,0.44),skin); foot.position.set(0,-0.05,0.12); ank.add(foot);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.09,0.4),skin); foot.position.set(0,-0.045,0.11); ank.add(foot);
   }
   group.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
   const rig={group,J,T:{},cur:{},rate:{},hipsY:1.34,hipsYc:1.34};
@@ -973,7 +975,7 @@ const coneyGroup = new THREE.Group();
 coneyGroup.position.set(0, 0, -1600);
 scene.add(coneyGroup);
 const coneyInstance = createConeyIsland(scene, camera, renderer);
-coneyInstance.build(coneyGroup, ()=>{ coneyStylePass(); coneyMergePass(); window.__coneyReady=true; });
+coneyInstance.build(coneyGroup, ()=>{ coneyStylePass(); coneyMergePass(); makeCityBillboard(); window.__coneyReady=true; });
 /* merge static city geometry by material — hundreds of draw calls become a handful */
 function coneyMergePass(){
   try{
@@ -994,7 +996,7 @@ function coneyMergePass(){
         const geos=list.map(o=>{ const g=o.geometry.clone(); g.applyMatrix4(o.matrixWorld); return g; });
         const g=mergeGeometries(geos,false); if(!g) continue;
         const m=new THREE.Mesh(g,mat); m.matrixAutoUpdate=false; m.castShadow=true; m.receiveShadow=true;
-        scene.add(m); made++;
+        scene.add(m); MERGED.push(m); made++;
         for(const o of list){ if(o.parent) o.parent.remove(o); o.geometry.dispose(); absorbed++; }
         geos.forEach(x=>x.dispose&&x.dispose());
       }catch(e){}
@@ -1224,6 +1226,11 @@ function mkPeer(o){ const look=PEER_LOOKS[(MP.looks++)%PEER_LOOKS.length];
     vx:0,vz:0, mode:o.m,st:o.s,score:o.sc||0, seen:performance.now() }; }
 function rmPeer(p){ scene.remove(p.grp); scene.remove(p.board); scene.remove(p.ski); }
 function mpRecv(o){ if(!o||o.i===MP.id) return;
+  if(o.game==='race'){ setupRace(o.at); return; }
+  if(o.game==='tag'){ setupTag(o.it,o.until); return; }
+  if(o.tagit){ if(GAME.mode==='tag'){ GAME.it=o.tagit;
+    flash(o.tagit===MP.id?'🏃 YOU\'RE IT!':((MP.peers.get(o.tagit)||{}).name||'SOMEONE')+' IS IT'); } return; }
+  if(o.fin!=null){ flash('🏁 '+(((MP.peers.get(o.i)||{}).name)||'RIVAL')+' FINISHED — '+o.fin+'s'); return; }
   if(o.bye){ const p=MP.peers.get(o.i); if(p){ rmPeer(p); MP.peers.delete(o.i); flash(p.name+' LEFT'); } return; }
   if(!o.n) return; o.n=sanitizeName(o.n)||'RIDER';
   let p=MP.peers.get(o.i);
@@ -1263,6 +1270,7 @@ function updatePeers(dt){ const now=performance.now();
           const kick=Math.min(9,3+rel*0.4); S.vel.x-=nx*kick; S.vel.z-=nz*kick;
           camShake=Math.max(camShake,0.6); Aud.cue('wipe'); dropletFX(0.35);
           addCombo('CRASHED '+p.name, Math.floor(40+rel*6));
+          if(GAME.mode==='tag'&&GAME.it===MP.id){ GAME.it=id; gameMsg({i:MP.id,tagit:id}); flash('🏃 TAGGED '+p.name+'!'); }
         } } }
   } }
 /* --- leaderboard (everyone currently in the room) --- */
@@ -1394,6 +1402,100 @@ function updatePod(dt,t){
   }
 }
 
+/* ===================== MULTIPLAYER GAMES: 1 = island race, 2 = tag ===================== */
+const GAME={mode:null, until:0, start:0, gate:0, it:null};
+const RACE_GATES=[[-40,-140],[340,60],[560,-120],[300,-420],[-80,-520],[-320,-260]];
+const raceRings=RACE_GATES.map(([x,z])=>{ const m=new THREE.Mesh(new THREE.TorusGeometry(9,0.8,8,24),
+  new THREE.MeshLambertMaterial({color:0xffb066,emissive:0xff8c42,emissiveIntensity:0.7,transparent:true,opacity:0.9}));
+  m.position.set(x,6,z); m.visible=false; m.userData.noWire=true; scene.add(m); return m; });
+function gameMsg(o){ try{ MP.bc&&MP.bc.postMessage(o); }catch(e){}
+  if(MP.mqtt&&MP.net){ try{ MP.mqtt.publish(mpTopic(),JSON.stringify(o)); }catch(e){} } }
+function startRace(){ if(!running) return; const st=Math.ceil(Date.now()/1000)+8;
+  gameMsg({i:MP.id,game:'race',at:st}); setupRace(st); }
+function startTag(){ if(!running) return;
+  gameMsg({i:MP.id,game:'tag',it:MP.id,until:Math.floor(Date.now()/1000)+120});
+  setupTag(MP.id,Date.now()/1000+120); }
+function setupRace(st){ GAME.mode='race'; GAME.start=st; GAME.gate=0;
+  raceRings.forEach(r=>{ r.visible=true; }); flash('🏁 RACE IN 8s — HIT THE ORANGE RINGS IN ORDER'); Aud.cue('big'); }
+function setupTag(it,until){ GAME.mode='tag'; GAME.it=it; GAME.until=until;
+  flash(it===MP.id?'🏃 TAG — YOU ARE IT! CRASH SOMEONE':'🏃 TAG! DON\'T GET CAUGHT'); Aud.cue('big'); }
+function updateGame(dt){
+  if(!GAME.mode) return;
+  const now=Date.now()/1000;
+  if(GAME.mode==='race'){
+    if(GAME.gate>=RACE_GATES.length){ GAME.mode=null; return; }
+    if(now<GAME.start) return;
+    const rr=raceRings[GAME.gate];
+    rr.material.emissiveIntensity=0.8+0.5*Math.sin(waterTime*6);
+    rr.position.y=6+Math.sin(waterTime*2)*0.8; rr.rotation.y=waterTime*0.7;
+    const g=RACE_GATES[GAME.gate];
+    if(Math.hypot(S.pos.x-g[0],S.pos.z-g[1])<12){
+      raceRings[GAME.gate].visible=false; GAME.gate++; Aud.cue('combo');
+      if(GAME.gate>=RACE_GATES.length){ const tm=+(now-GAME.start).toFixed(1);
+        addCombo('🏁 RACE FINISHED '+tm+'s', 300); gameMsg({i:MP.id,fin:tm});
+        GAME.mode=null; raceRings.forEach(r=>r.visible=false); }
+      else flash('RING '+GAME.gate+' / '+RACE_GATES.length); }
+  } else if(GAME.mode==='tag'){
+    if(now>GAME.until){ GAME.mode=null; flash('🏃 TAG OVER'); return; }
+    if(GAME.it!==MP.id) score+=dt*6;   // staying free earns points
+  }
+}
+
+/* ===================== AMBIENT MUSIC: carousel organ + cab radio (synthesized) ===================== */
+let musT=0, musI=0;
+const ORGAN=[523,659,784,659,880,784,659,523,587,698,880,698,932,880,698,587];
+const RADIO=[130.8,0,164.8,196,130.8,0,196,164.8];
+function updateMusic(dt){
+  if(!running||Aud.muted||!Aud.ok) return;
+  let kind=null, gain=0;
+  if(S.mode==='car'){ kind='radio'; gain=0.075; }
+  else { const d=Math.hypot(S.pos.x-40,S.pos.z+1566); if(d<130&&S.mode!=='jetski'){ kind='organ'; gain=0.08*(1-d/130); } }
+  if(!kind){ musT=0; return; }
+  musT+=dt; const step=kind==='organ'?0.27:0.24;
+  if(musT>=step){ musT=0; musI++;
+    const seq=kind==='organ'?ORGAN:RADIO; const f=seq[musI%seq.length];
+    if(f) Aud.blip(f, kind==='organ'?0.24:0.18, kind==='organ'?'triangle':'square', gain);
+    if(kind==='radio'&&musI%2===0) Aud.blip(5200,0.03,'square',gain*0.22); }
+}
+
+/* ===================== SHARED WEATHER (wall-clock synced) ===================== */
+const WX={kind:'sun', f:0, bolt:0};
+const RAIN=new PointPool(900,TEX.soft,0xbcd2e2,THREE.NormalBlending,0.55,false);
+function updateWeather(dt){
+  const slot=Math.floor(waterTime/240);
+  const hs=Math.sin(slot*53.7)*43758.5453; const h=hs-Math.floor(hs);
+  WX.kind = h<0.62 ? 'sun' : (h<0.87 ? 'rain' : 'storm');
+  WX.f += (((WX.kind!=='sun')?1:0)-WX.f)*Math.min(1,dt*0.4);
+  scene.fog.density=0.0011+WX.f*0.0013;
+  if(WX.f>0.15){ const n=Math.floor(WX.f*(WX.kind==='storm'?24:12));
+    for(let i=0;i<n;i++) RAIN.spawn(camera.position.x+rand(-55,55), camera.position.y+rand(12,32), camera.position.z+rand(-55,55),
+      rand(-1,1), -40, rand(-1,1), {life:0.9,size:0.45,grow:0,grav:0,damp:0,alpha:0.5}); }
+  if(WX.kind==='storm'&&WX.f>0.5&&Math.random()<dt*0.22){ WX.bolt=1; Aud.cue('boom'); camShake=Math.max(camShake,0.12); }
+  if(WX.bolt>0){ sun.intensity=ENV.sunI*(1+WX.bolt*7); hemi.intensity=0.85+WX.bolt*1.5; WX.bolt-=dt*4; }
+}
+
+/* ===================== FAR-CITY BILLBOARD LOD ===================== */
+const MERGED=[];
+let cityBillboard=null;
+function makeCityBillboard(){
+  try{
+    const rt=new THREE.WebGLRenderTarget(1024,300);
+    const cam2=new THREE.PerspectiveCamera(30,1024/300,10,4000);
+    cam2.position.set(0,20,-520); cam2.lookAt(0,25,-1650); cam2.updateProjectionMatrix();
+    const hid=[ocean,wireOcean,skyMesh,stars,player.grp,player.board,...GLOW_DOMES];
+    const vis=hid.map(o=>o.visible); hid.forEach(o=>o.visible=false);
+    const wasFog=scene.fog.density; scene.fog.density=0;
+    renderer.setRenderTarget(rt); renderer.setClearColor(0x000000,0); renderer.clear(); renderer.render(scene,cam2);
+    renderer.setRenderTarget(null); scene.fog.density=wasFog;
+    hid.forEach((o,i)=>o.visible=vis[i]);
+    const bw=2200, bh=bw*300/1024;
+    cityBillboard=new THREE.Mesh(new THREE.PlaneGeometry(bw,bh),
+      new THREE.MeshBasicMaterial({map:rt.texture,transparent:true,depthWrite:false,fog:true}));
+    cityBillboard.position.set(0,bh*0.3,-1610); cityBillboard.visible=false; cityBillboard.userData.noWire=true;
+    scene.add(cityBillboard);
+  }catch(e){ console.warn('billboard skipped',e); }
+}
+
 /* ===================== NIGHT SKY + FIREWORKS (wall-clock synced show) ===================== */
 let moodF=0;   // 0 day … 1 night
 const stars=(()=>{ const n=650, pos=new Float32Array(n*3);
@@ -1409,7 +1511,7 @@ const GLOW_DOMES=[[0,-1560,320,0xffc98a],[-320,-1680,260,0xffb070],[320,-1680,26
 const FW_POOLS=[0xffc46a,0x7ef0e6,0xff7ab0,0xbfd0ff].map(c=>new PointPool(320,TEX.soft,c,THREE.AdditiveBlending,1.0,false));
 let fwSlot=-1;
 function updateFireworks(){
-  if(moodF<0.35) return;
+  if(moodF<0.35 || WX.f>0.4) return;   // no show in the rain
   const slot=Math.floor(waterTime/4); if(slot===fwSlot) return; fwSlot=slot;
   const h=k=>{ const s=Math.sin(slot*k)*43758.5453; return s-Math.floor(s); };
   if(h(127.1)<0.45) return;                                     // some slots stay dark
@@ -1493,6 +1595,7 @@ const Aud={ ok:false, muted:false,
     this.wind= layer(white,'bandpass',1500,0.5,0.02);
     this.hiss= layer(white,'highpass',2600,0.5,0.0);
     this.tube= layer(brown,'lowpass',150,1.2,0.0);
+    this.crowd=layer(pink,'bandpass',540,0.9,0.0);
     const jg=C.createGain(); jg.gain.value=0; jg.connect(this.master); this.jetG=jg;
     const o1=C.createOscillator(); o1.type='sawtooth'; o1.frequency.value=60;
     const o2=C.createOscillator(); o2.type='sawtooth'; o2.frequency.value=61.1;
@@ -1503,14 +1606,17 @@ const Aud={ ok:false, muted:false,
   g(node,target,dt,rate=8){ node.gain.value+=(target-node.gain.value)*Math.min(1,dt*rate); },
   update(dt,snap){ if(!this.ok||this.muted) return;
     this.g(this.bed.g, 0.13+0.10*snap.set+0.05*snap.spd01, dt);
-    this.g(this.wash.g,0.04+0.16*snap.roar, dt);
+    this.g(this.wash.g,0.04+0.16*snap.roar+0.2*(snap.rain||0), dt);
+    this.g(this.crowd.g,0.11*(snap.crowd||0), dt);
     this.g(this.wind.g,(0.018+0.055*snap.spd01+(snap.air?0.10:0))*(1-snap.under*0.8), dt);
     this.wind.f.frequency.value=1200+700*Math.sin(waterTime*0.37)+900*snap.spd01;
     this.g(this.hiss.g, snap.carve*0.20, dt, 12);
     this.g(this.tube.g, snap.tube*0.5, dt, 5);
     this.g(this.jetG, snap.jet?0.10+0.08*snap.spd01:0, dt, 10);
     if(snap.jet){ const f=52*(1+snap.spd01*2.6)*(1+0.05*Math.sin(waterTime*13));
-      this.jetO[0].frequency.value=f; this.jetO[1].frequency.value=f*1.013; }
+      this.jetO[0].frequency.value=f; this.jetO[1].frequency.value=f*1.013;
+      if(snap.heliT) this.jetG.gain.value*=(0.55+0.45*Math.abs(Math.sin(waterTime*13)));   // rotor thump
+    }
     this.lp.frequency.value=19000-(19000-560)*snap.under; },
   blip(fr,dur,type='sine',g0=0.16,when=0){ if(!this.ok||this.muted) return; const C=this.ctx,t0=C.currentTime+when;
     const o=C.createOscillator(),g=C.createGain(); o.type=type; o.frequency.value=fr;
@@ -1538,6 +1644,7 @@ const keys={};
 addEventListener('keydown',e=>{ keys[e.code]=true;
   if(e.code==='KeyC') cycleCam(); if(e.code==='KeyR') resetToWave(); if(e.code==='Space') tryPopOrAir();
   if(e.code==='KeyT') autoCatch(); if(e.code==='KeyJ') toggleJetski(); if(e.code==='KeyB') headToReef(); if(e.code==='KeyF') toggleWire(); if(e.code==='KeyG'||e.code==='KeyE') interact(); if(e.code==='KeyN') teleportToConey();
+  if(e.code==='Digit1') startRace(); if(e.code==='Digit2') startTag();
   if(e.code==='KeyK'){ setPreset(envName==='day'?'golden':(envName==='golden'?'night':'day'));
     flash(envName==='day'?'MIDDAY':(envName==='golden'?'GOLDEN HOUR':'NIGHT — WATCH FOR FIREWORKS')); }
   if(e.code==='KeyM') Aud.toggle();
@@ -2507,6 +2614,10 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
   if(window.__coneyReady&&lbT===0) coneyInstance.setMood(moodF);
   updateFireworks(); for(const p of FW_POOLS) p.update(dt);
   updateWildlife(dt,waterTime);
+  updateWeather(dt); RAIN.update(dt);
+  if(running){ updateGame(dt); updateMusic(dt); }
+  if(cityBillboard){ const far=Math.hypot(focus.x,focus.z+1600)>2100;
+    if(far!==cityBillboard.visible){ cityBillboard.visible=far; coneyGroup.visible=!far; for(const m of MERGED) m.visible=!far; } }
   heli.userData.rotor.rotation.y += dt*(S.mode==='heli'?28:2.2);
   heli.userData.tailRotor.rotation.x += dt*(S.mode==='heli'?42:3);
   if(ssaoPass){ const aoOn = qLevel===0 && Math.hypot(focus.x,focus.z+1600)<900;
@@ -2524,7 +2635,10 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
     roar=(1-clamp((Math.hypot(ax-px,az-pz)-30)/260,0,1))*wv.amp; }
   Aud.update(dt,{ set:curSetAmp, spd01:clamp(sp/30,0,1), roar,
     carve:((S.state==='ride'&&!S.airborne)?S.carve*clamp(sp/22,0,1):0)+((S.mode==='jetski'&&sp>13)?0.3:0)+((S.state==='barrel'&&(keys.KeyD||keys.ArrowRight))?0.22:0),
-    tube:S.barreled?1:(S.state==='barrel'?0.32:0), jet:S.mode==='jetski'||S.mode==='car'||S.mode==='heli', air:S.airborne, under:underT });
+    tube:S.barreled?1:(S.state==='barrel'?0.32:0), jet:S.mode==='jetski'||S.mode==='car'||S.mode==='heli',
+    heliT:S.mode==='heli', rain:WX.f,
+    crowd:(Math.abs(S.pos.x)<1150? clamp(1-Math.abs(S.pos.z+1560)/180,0,1):0),
+    air:S.airborne, under:underT });
   gullCryT-=dt; if(gullCryT<=0){ gullCryT=rand(7,16);
     for(const b of gulls){ if(b.g.position.distanceTo(camera.position)<260){ Aud.cue('gull'); break; } } }
 
