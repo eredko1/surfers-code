@@ -1379,6 +1379,9 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         const headGeom = new THREE.SphereGeometry(0.155, 10, 8); headGeom.translate(0, 1.6, 0);
         const headInst = new THREE.InstancedMesh(headGeom, new THREE.MeshStandardMaterial({ roughness: 0.7 }), count);
         headInst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+        const hairGeom = new THREE.SphereGeometry(0.165, 9, 7, 0, 6.29, 0, 1.7); hairGeom.translate(0, 1.63, -0.01);
+        const hairInst = new THREE.InstancedMesh(hairGeom, new THREE.MeshStandardMaterial({ roughness: 0.9 }), count);
+        hairInst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
 
         const m4 = new THREE.Matrix4();
         const q = new THREE.Quaternion();
@@ -1412,6 +1415,9 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           legsInst.setColorAt(i, col);
           col.setHSL(0.07 + Math.random() * 0.02, 0.45 + Math.random() * 0.2, 0.28 + Math.random() * 0.42);
           headInst.setColorAt(i, col);
+          hairInst.setMatrixAt(i, m4);
+          col.setHSL(0.06 + Math.random() * 0.05, 0.4 + Math.random() * 0.3, 0.06 + Math.random() * 0.2);
+          hairInst.setColorAt(i, col);
           people.push({
             idx: i, x: startX, y: deckY, z: startZ,
             targetZ, currentZ: startZ,
@@ -1425,10 +1431,13 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
         if (headInst.instanceColor) headInst.instanceColor.needsUpdate = true;
         legsInst.instanceMatrix.needsUpdate = true;
         if (legsInst.instanceColor) legsInst.instanceColor.needsUpdate = true;
-        peopleGroup.add(inst); peopleGroup.add(headInst); peopleGroup.add(legsInst);
+        hairInst.instanceMatrix.needsUpdate = true;
+        if (hairInst.instanceColor) hairInst.instanceColor.needsUpdate = true;
+        peopleGroup.add(inst); peopleGroup.add(headInst); peopleGroup.add(legsInst); peopleGroup.add(hairInst);
         peopleGroup.userData.inst = inst;
         peopleGroup.userData.head = headInst;
         peopleGroup.userData.legs = legsInst;
+        peopleGroup.userData.hair = hairInst;
       }
 
       /* ============================================================
@@ -12214,10 +12223,13 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
           if (head) head.setMatrixAt(p.idx, _peopleM);
           const legs = peopleGroup.userData.legs;
           if (legs) legs.setMatrixAt(p.idx, _peopleM);
+          const hair = peopleGroup.userData.hair;
+          if (hair) hair.setMatrixAt(p.idx, _peopleM);
         });
         inst.instanceMatrix.needsUpdate = true;
         if (head) head.instanceMatrix.needsUpdate = true;
         if (peopleGroup.userData.legs) peopleGroup.userData.legs.instanceMatrix.needsUpdate = true;
+        if (peopleGroup.userData.hair) peopleGroup.userData.hair.instanceMatrix.needsUpdate = true;
       }
 
       function animateCarousels(t, delta) {
@@ -12635,7 +12647,7 @@ export function createConeyIsland(mainScene, mainCamera, mainRenderer) {
       () => createVehicles(settings.numBuses, settings.numVehicles),
       () => createTreesAndBushes(400, groundSize, groundMesh.position.y + terrainAmp),
       () => createParkArea({ x: -180, z: -120 }),
-      () => { estimatedPopulation = 160; createPeople(estimatedPopulation); },   // sparse, realistic crowd
+      () => { estimatedPopulation = 100; createPeople(estimatedPopulation); },   // handful of realistic locals
       () => generateBuildings(settings.numBuildings),
       buildAvenues,
       () => { const rideGroup = new THREE.Group();

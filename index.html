@@ -394,7 +394,7 @@ camera.position.set(0,8,-16);
 const hemi=new THREE.HemisphereLight(0xddf3ff,0x2c6f78,0.85); scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffe6bf,2.0); sun.position.copy(ENV.sunDir).multiplyScalar(300); scene.add(sun);
 scene.add(sun.target);
-if(!IS_TOUCH){ sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+if(!IS_TOUCH){ sun.castShadow=true; sun.shadow.mapSize.set(4096,4096);
   const sc=sun.shadow.camera; sc.near=40; sc.far=750; sc.left=-170; sc.right=170; sc.top=170; sc.bottom=-170;
   sun.shadow.bias=-0.00035; sun.shadow.normalBias=0.6; sc.updateProjectionMatrix(); }
 
@@ -1026,6 +1026,7 @@ function coneyStylePass(){
       if(hex===0xa8b1ba||hex===0x8a8580) L.map=GROUND_DETAIL;
       if(hex===0x444a52||hex===0x464c54) L.map=ASPHALT_DETAIL; }   // streets + avenues get worn asphalt grain
     if(!L.map) L.map=m.map||null;
+    if(L.map) L.map.anisotropy=8;                  // crisp textures at grazing angles
     if(m.emissive) L.emissive.copy(m.emissive);
     L.emissiveMap=m.emissiveMap||null;
     L.emissiveIntensity=m.emissiveIntensity??1;
@@ -1286,7 +1287,9 @@ function updateLB(){
 /* --- radar: breaks, islands, incoming sets, riders --- */
 const rdCv=document.getElementById('radar'), rdc=rdCv.getContext('2d');
 function drawRadar(){
-  const W=rdCv.width, R=W/2, sc=(R-10)/850;
+  const nearCity=Math.hypot(S.pos.x,S.pos.z+1600)<700;
+  const range=nearCity?420:850;                     // zoom in around Coney for street-level detail
+  const W=rdCv.width, R=W/2, sc=(R-10)/range;
   rdc.clearRect(0,0,W,W);
   rdc.save(); rdc.beginPath(); rdc.arc(R,R,R-1,0,6.2832); rdc.clip();
   rdc.fillStyle='rgba(4,16,28,.8)'; rdc.fillRect(0,0,W,W);
@@ -1316,9 +1319,20 @@ function drawRadar(){
   for(const L of LUMPS){ if(L.amp<0.4) continue; const [x,y]=P(L.cx,L.cz);
     rdc.fillStyle='rgba(126,240,230,.7)'; rdc.beginPath(); rdc.arc(x,y,2.5,0,6.2832); rdc.fill(); }
   rdc.font='10px sans-serif'; rdc.textAlign='center';
-  { const [gx,gy]=P(60,-1562); rdc.fillText('🎯',gx,gy+3);
-    const [nx2,ny2]=P(-20,-1570); rdc.fillText('🌭',nx2,ny2+3);
-    const [hx,hy]=P(heli.position.x,heli.position.z); rdc.fillText('🚁',hx,hy+3); }
+  const mk=(x,z,e,dim)=>{ let dx=(x-S.pos.x)*sc, dy=-(z-S.pos.z)*sc; const dd=Math.hypot(dx,dy)||1;
+    const cl=dd>R-12; if(cl){ dx*=(R-12)/dd; dy*=(R-12)/dd; }
+    rdc.globalAlpha=cl?0.3:(dim??1); rdc.fillText(e,R+dx,R+dy+3); rdc.globalAlpha=1; };
+  mk(60,-1562,'🎯'); mk(-20,-1570,'🌭'); mk(heli.position.x,heli.position.z,'🚁');
+  if(cabParked) mk(cab.position.x,cab.position.z,'🚕');
+  if(RIDEABLES) for(const r of RIDEABLES){ if(r.gates||r.gateLocal) continue;
+    r.gate.getWorldPosition(_rideV); mk(_rideV.x,_rideV.z,RIDE_ICON[r.name]||'🎟',0.85); }
+  if(GAME.mode==='race'&&GAME.gate<RACE_GATES.length){
+    for(let i=GAME.gate;i<RACE_GATES.length;i++){ const [gx2,gz2]=RACE_GATES[i];
+      let dx=(gx2-S.pos.x)*sc, dy=-(gz2-S.pos.z)*sc; const dd=Math.hypot(dx,dy)||1;
+      if(dd>R-12){ dx*=(R-12)/dd; dy*=(R-12)/dd; }
+      const cur=i===GAME.gate;
+      rdc.strokeStyle=cur?('rgba(255,176,102,'+(0.7+0.3*Math.sin(waterTime*6)).toFixed(2)+')'):'rgba(255,176,102,.35)';
+      rdc.lineWidth=cur?2.5:1.5; rdc.beginPath(); rdc.arc(R+dx,R+dy,cur?5:3,0,6.2832); rdc.stroke(); } }
   rdc.font='bold 9px sans-serif';
   for(const p of MP.peers.values()){ const [x,y]=P(p.x,p.z);
     rdc.fillStyle='#ffb066'; rdc.beginPath(); rdc.arc(x,y,3,0,6.2832); rdc.fill();
@@ -1809,7 +1823,11 @@ function exitRide(){
   let ex=S.pos.x, ez=S.pos.z, ey=S.y;
   if(r){ if(r.gateLocal){ r.seat.getWorldPosition(_rideV); ex=clamp(_rideV.x,-1080,1080); ez=_rideV.z+5; ey=_rideV.y; }
     else { r.gate.getWorldPosition(_rideV); ex=_rideV.x; ez=_rideV.z+r.gr*0.6; ey=Math.max(S.y,2); } }
-  S.pos.set(ex,0,ez); S.y=ey; S.vy=0; S.vel.set(0,0,0); S.airborne=true;   // hop down
+  /* always step off onto dry, walkable ground — march toward the city until the plaza catches you */
+  for(let k=0;k<14 && getWalkHeight(ex,ez)<-0.5;k++) ez-=5;
+  if(getWalkHeight(ex,ez)<-0.5){ ex=clamp(ex,-1000,1000); ez=-1560; }
+  S.pos.set(ex,0,ez); S.y=Math.min(ey,getWalkHeight(ex,ez)+14); S.vy=0; S.vel.set(0,0,0); S.airborne=true;
+  S.walkGrace=1.6;                               // no auto-paddle right after a ride
   player.board.visible=true;
   if(r) addCombo('RODE THE '+r.name, 60);
 }
@@ -1911,6 +1929,7 @@ function exitHeli(){ const gY=Math.max(getWalkHeight(S.pos.x,S.pos.z), sampleWat
   player.grp.visible=true; player.board.visible=true;
   const onLand=getWalkHeight(S.pos.x,S.pos.z)>-0.85;
   S.mode=onLand?'walk':'surf'; if(!onLand){ S.state='paddle'; reclaimBoard(); splashAt(S.pos.x,S.pos.z,0.8); }
+  else S.walkGrace=1.6;
   S.vy=0; S.vel.set(0,0,0);
   headingDir(dirVec); S.pos.x+=dirVec.z*2.6; S.pos.z+=-dirVec.x*2.6;
   addCombo('FLEW THE CHOPPER',80); }
@@ -2058,7 +2077,8 @@ function physics(dt){
     
     const terrainY = getWalkHeight(S.pos.x, S.pos.z);
     if (terrainY <= -900) { S.pos.x = prevX; S.pos.z = prevZ; S.vel.set(0, 0, 0); }
-    else if (terrainY < -0.95 && !S.airborne) { toggleWalk(); return; }   // waded past waist depth → paddle out
+    S.walkGrace=Math.max(0,(S.walkGrace||0)-dt);
+    if (terrainY > -900 && terrainY < -0.95 && !S.airborne && S.walkGrace<=0) { toggleWalk(); return; }   // waded past waist depth → paddle out
     if (!S.airborne) {
       S.vy = 0;
       S.y += (terrainY - S.y) * Math.min(1, dt * 12);                     // smooth steps and slopes
