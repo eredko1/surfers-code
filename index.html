@@ -59,6 +59,10 @@
   .lbrow b { font-variant-numeric:tabular-nums; }
   .lbrow.me span { color:#7ef0e6; font-weight:700; }
   #radar { display:block; margin:0 0 6px auto; width:150px; height:150px; }
+  #radMin { pointer-events:auto; display:block; margin-left:auto; background:none; border:none; color:#7ef0e6;
+            font-size:11px; letter-spacing:1px; cursor:pointer; padding:0 0 4px; font-family:inherit; }
+  body.radmin #radar { display:none; }
+  body.radmin.touch #compass { bottom:232px; }
 
   #touch { position:fixed; inset:0; pointer-events:none; z-index:6; display:none; }
   body.touch #touch { display:block; }
@@ -171,7 +175,7 @@
     <div><kbd>W</kbd> paddle/pump · <kbd>A</kbd><kbd>D</kbd> carve/stall/spin · <kbd>Space</kbd> pop up · air (hold = grab) · <kbd>S</kbd> slow / kick out</div>
     <div><kbd>J</kbd> jet ski · <kbd>G</kbd> walk / ride / drive / fly · <kbd>B</kbd> next break · <kbd>1</kbd> race <kbd>2</kbd> tag · <kbd>K</kbd> day/night · <kbd>M</kbd> sound · <kbd>R</kbd> reset</div>
   </div>
-  <div id="compass" class="panel"><canvas id="radar" width="150" height="150"></canvas>reef break: <b id="reefdir">→</b> <span id="reefdist"></span></div>
+  <div id="compass" class="panel"><button id="radMin">radar ▾</button><canvas id="radar" width="150" height="150"></canvas>reef break: <b id="reefdir">→</b> <span id="reefdist"></span></div>
   <div id="lb" class="panel"><div class="hd" id="lbHead"></div><div id="lbRows"></div></div>
 </div>
 
@@ -233,6 +237,11 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const rand=(a=1,b)=> b===undefined ? Math.random()*a : a+Math.random()*(b-a);
 const IS_TOUCH='ontouchstart' in window;
 if(IS_TOUCH) document.body.classList.add('touch');
+{ const rb=document.getElementById('radMin');
+  const lbl=()=>{ rb.textContent=document.body.classList.contains('radmin')?'radar ▸':'radar ▾'; };
+  rb.addEventListener('click',()=>{ document.body.classList.toggle('radmin'); lbl(); });
+  if(IS_TOUCH) document.body.classList.add('radmin');   // minimized by default on phones
+  lbl(); }
 
 /* ===================== LIVE ENVIRONMENT (day <-> golden hour, all materials share these instances) ===================== */
 const ENV={
@@ -332,9 +341,10 @@ function reefWaveFor(R,t){ const WT=SET_PERIOD; const tt=t+R.phase; const cy=Mat
   const bt=tw-APPROACH;
   const active = on && bt>=0 && bt<R.peelDur;
   const peel = active? (bt/R.peelDur)*R.lineLen : (bt<0? -60 : R.lineLen+80);
-  let amp=0; if(on&&bt>=0) amp = bt<R.peelDur? smooth(0,1.6,bt)*size : Math.max(0,size*(1-(bt-R.peelDur)/WAVE_DIE));
+  let amp=0; if(on&&bt>=0) amp = bt<R.peelDur? smooth(0,2.4,bt)*size : Math.max(0,size*(1-(bt-R.peelDur)/WAVE_DIE));
   const pre = (on&&bt<0)? tw/APPROACH : 0;
-  return {active, peel, amp, tw:bt, pre, size, cy}; }
+  const adv = (on&&bt>=0&&bt<1.6)? -(1.6-bt)*11 : 0;   // the young wave still slides shoreward with the swell
+  return {active, peel, amp, tw:bt, pre, size, cy, adv}; }
 const reefWave=(t)=>reefWaveFor(REEF,t);
 
 /* incoming set lumps — the visible swell that becomes the wave */
@@ -342,18 +352,18 @@ const LUMPS=REEFS.map(R=>({R,amp:0,cx:0,cz:0,w:30}));
 function updateLumps(t){
   for(const L of LUMPS){ const R=L.R; const wv=reefWaveFor(R,t); const bt=wv.tw;
     let u=-1;
-    if(wv.size>0){ if(bt<0) u=1+bt/APPROACH; else if(bt<1.4) u=1; }
+    if(wv.size>0){ if(bt<0) u=1+bt/APPROACH; else if(bt<2.0) u=1; }
     if(u<0){ L.amp=0; continue; }
     const adv=(1-u)*150;
     L.cx=R.O.x-R.f.x*adv; L.cz=R.O.y-R.f.y*adv;
-    L.amp=R.Hmax*0.30*wv.size*smooth(0.03,0.4,u)*(bt>=0? 1-bt/1.4 : 1);
+    L.amp=R.Hmax*0.30*wv.size*smooth(0.03,0.4,u)*(bt>=0? Math.max(0,1-bt/2.0) : 1);
     L.w=34-10*u;                       // narrows and steepens as it nears the reef
   }
 }
 
 function reefShapeFor(R,along, peel, gAmp){
   const d = along - peel;
-  const curl   = (1 - smooth(0, 60, d)) * smooth(0.30, 0.85, gAmp);   // soft peak first, throws as it grows; small sets stay soft
+  const curl   = (1 - smooth(0, 60, d)) * smooth(0.40, 0.90, gAmp);   // soft rolling peak first, throws only once fully stood up
   const broken = smooth(6, 70, -d);
   const endT   = smooth(0,75,along)*smooth(R.lineLen,R.lineLen-75,along);
   const aheadFade = 1 - 0.72*smooth(75, 250, d);
@@ -368,9 +378,9 @@ function crossSection(v, curl, H){
   const q=(v-riseEnd)/(1-riseEnd); const ang=q*(0.10+curl*1.66)*Math.PI; const R=H*(0.14+0.33*curl);
   return { f: crestF + R*(1-Math.cos(ang)), y: crestY + R*Math.sin(ang) };
 }
-function reefWorldFor(R,along, v, peel, gAmp, out){
+function reefWorldFor(R,along, v, peel, gAmp, out, adv=0){
   const sh=reefShapeFor(R,along,peel,gAmp); const cs=crossSection(v, sh.curl, sh.H);
-  out.set(R.O.x + R.s.x*along + R.f.x*cs.f, cs.y, R.O.y + R.s.y*along + R.f.y*cs.f);
+  out.set(R.O.x + R.s.x*along + R.f.x*(cs.f+adv), cs.y, R.O.y + R.s.y*along + R.f.y*(cs.f+adv));
   return out;
 }
 function distToReefTakeoff(x,z){
@@ -589,12 +599,12 @@ class BarrelSurf{
     this.mesh=new THREE.Mesh(g,bMat); this.mesh.frustumCulled=false; scene.add(this.mesh);
   }
   update(t){ const R=this.R, nu=this.nu, nv=this.nv, pos=this.pos, dat=this.dat, nrm=this.nrm;
-    const wv=reefWaveFor(R,t); this.wave=wv; const peel=wv.peel, gA=wv.amp;
+    const wv=reefWaveFor(R,t); this.wave=wv; const peel=wv.peel, gA=wv.amp, adv=wv.adv||0;
     for(let i=0;i<nu;i++){ const along=(i/(nu-1))*R.lineLen; const sh=reefShapeFor(R,along,peel,gA);
       for(let j=0;j<nv;j++){ const v=j/(nv-1); const cs=crossSection(v,sh.curl,sh.H); const o3=(i*nv+j)*3, o4=(i*nv+j)*4;
-        pos[o3]  =R.O.x + R.s.x*along + R.f.x*cs.f;
+        pos[o3]  =R.O.x + R.s.x*along + R.f.x*(cs.f+adv);
         pos[o3+1]=cs.y;
-        pos[o3+2]=R.O.y + R.s.y*along + R.f.y*cs.f;
+        pos[o3+2]=R.O.y + R.s.y*along + R.f.y*(cs.f+adv);
         const lipFoam = smooth(0.90,0.995,v)*smooth(0.5,1.0,sh.curl);
         const trail   = sh.broken*smooth(0.0,0.4,v);
         const ball    = Math.exp(-Math.pow((sh.d+4)/9,2))*smooth(0.30,0.85,v);   // churning foam ball in the pocket
@@ -1140,7 +1150,7 @@ class AISurfer{
         this.along += R.peelSpeed*(1.02+0.10*Math.sin(t*0.7+this.seed))*dt;
         if(this.along-wv.peel < -6) { this.state='back'; splashAt(g.position.x,g.position.z,1.4); }
         this.faceV = 0.36+0.10*Math.sin(t*1.15+this.seed*2);
-        reefWorldFor(R,this.along,clamp(this.faceV,0.2,0.55),wv.peel,wv.amp,g.position);
+        reefWorldFor(R,this.along,clamp(this.faceV,0.2,0.55),wv.peel,wv.amp,g.position,wv.adv||0);
         g.rotation.set(0,Math.atan2(R.s.x,R.s.y),0); g.rotateZ(this.faceV>0.40?-0.28:0.12);
         poseRide(rg,{bend:0.62,lean:0.2,twist:0.2});
         if(Math.random()<dt*6) emitSpray(g.position.x,g.position.y+0.1,g.position.z,0.7,0.8);
@@ -1683,7 +1693,8 @@ if(IS_TOUCH){
   bind('tbPop',()=>{ keys.Space=true;   // hold = grab, same as the keyboard
       if(running&&S.mode==='surf'&&S.state==='paddle'&&!S.catchOpen) autoCatch(); else tryPopOrAir(); },
     ()=>{ keys.Space=false; });
-  bind('tbJet',()=>toggleJetski());
+  bind('tbJet',()=>{ if(S.mode==='heli'){ keys.ShiftLeft=true; return; } toggleJetski(); },
+    ()=>{ keys.ShiftLeft=false; });
   bind('tbBrk',()=>headToReef());
   bind('tbWalk',()=>interact());
 }
@@ -1748,6 +1759,8 @@ function getWalkHeight(x, z) {
   /* Coney Island — matches the actual meshes in coney.js exactly */
   const localX = x;
   const localZ = z + 1600;
+  /* Steeplechase Pier deck — walkable all the way out over the water */
+  if (localZ > 44 && localZ < 176 && Math.abs(localX - 20) < (localZ > 158 ? 9 : 4.2)) return 2.15;
   if (Math.abs(localX) < 1140 && localZ > -1100 && localZ < 140) {
     if (localZ >= 30.6 && localZ <= 45.4) return 0.95;            // boardwalk planks
     if (localZ > 45.4) {                                          // sand: dry berm → shore slope underwater
@@ -1893,8 +1906,9 @@ const cab=(()=>{ const g=new THREE.Group();
   for(const [wx,wz] of [[-0.95,1.45],[0.95,1.45],[-0.95,-1.5],[0.95,-1.5]]){
     const w=new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.28,10),dk); w.rotation.z=Math.PI/2; w.position.set(wx,0.4,wz); g.add(w); }
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
-  g.visible=false; scene.add(g); return g; })();
-let cabParked=false;
+  g.visible=true; g.position.set(20,2.15,-1447); g.rotation.y=Math.PI;   // waiting on the pier
+  scene.add(g); return g; })();
+let cabParked=true;
 /* ---- boardwalk helicopter: hold Space to lift, W/S fly, land anywhere ---- */
 const heli=(()=>{ const g=new THREE.Group();
   const red=new THREE.MeshPhongMaterial({color:0xc62828,shininess:85,specular:0x775555});
@@ -1914,16 +1928,16 @@ const heli=(()=>{ const g=new THREE.Group();
     skid.rotation.x=Math.PI/2; skid.position.set(sx*0.85,0.3,0.2); g.add(skid);
     for(const sz of [-0.7,1.0]){ const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.0,6),skidM); leg.position.set(sx*0.85,0.8,sz); g.add(leg); } }
   g.traverse(o=>{ if(o.isMesh) o.castShadow=true; });
-  g.position.set(-150,1.0,-1562); scene.add(g); return g; })();
+  g.position.set(20,2.2,-1431); scene.add(g); return g; })();   // end of Steeplechase Pier — ready to fly
 { const pad=new THREE.Mesh(new THREE.CylinderGeometry(4.6,4.6,0.08,24),
     new THREE.MeshLambertMaterial({map:canvasTex((g,s)=>{ g.fillStyle='#2d3640'; g.fillRect(0,0,s,s);
       g.strokeStyle='#f2f2ee'; g.lineWidth=5; g.beginPath(); g.arc(s/2,s/2,s*0.4,0,6.283); g.stroke();
       g.fillStyle='#f2f2ee'; g.font='bold 62px Helvetica,Arial'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('H',s/2,s/2+2); },128)}));
-  pad.position.set(-150,0.97,-1562); scene.add(pad); }
+  pad.position.set(20,2.17,-1431); scene.add(pad); }
 function enterHeli(){ S.mode='heli'; S.pos.set(heli.position.x,0,heli.position.z); S.y=heli.position.y;
   S.vel.set(0,0,0); S.vy=0; S.airborne=false;
   player.grp.visible=false; player.board.visible=false; leash.visible=false;
-  flash('🚁 HOLD SPACE TO LIFT OFF — W TO FLY'); Aud.cue('combo'); }
+  flash('🚁 SPACE = UP · SHIFT = DOWN · W = FLY'); Aud.cue('combo'); }
 function exitHeli(){ const gY=Math.max(getWalkHeight(S.pos.x,S.pos.z), sampleWater(S.pos.x,S.pos.z,waterTime).y);
   if(S.y-gY>3.5){ flash('LAND FIRST'); return; }
   player.grp.visible=true; player.board.visible=true;
@@ -1977,7 +1991,8 @@ function updateRidePrompt(){
     el.className='on'; }
   else el.className='';
   if(IS_TOUCH){ const b=document.getElementById('tbWalk');
-    b.textContent = (S.mode==='attraction'||S.mode==='car') ? 'HOP OFF' : (label ? 'RIDE' : (S.mode==='walk' ? 'BOARD' : 'WALK')); }
+    b.textContent = (S.mode==='attraction'||S.mode==='car'||S.mode==='heli') ? 'HOP OFF' : (label ? 'RIDE' : (S.mode==='walk' ? 'BOARD' : 'WALK'));
+    document.getElementById('tbJet').textContent = S.mode==='heli' ? '⬇ DOWN' : 'JET SKI'; }
 }
 function interact(){
   if(!running) return;
@@ -2146,8 +2161,9 @@ function physics(dt){
     S.vel.x *= (1 - 1.1 * dt); S.vel.z *= (1 - 1.1 * dt);
     S.pos.x += S.vel.x * dt; S.pos.z += S.vel.z * dt;
     const gY = Math.max(getWalkHeight(S.pos.x, S.pos.z), sampleWater(S.pos.x, S.pos.z, t).y);
-    if (keys.Space) S.vy += (8.5 - S.vy) * Math.min(1, dt * 2.5);   // collective up
-    else S.vy += (-4.5 - S.vy) * Math.min(1, dt * 1.6);             // brisk but soft descent
+    if (keys.Space) S.vy += (8.5 - S.vy) * Math.min(1, dt * 2.5);                       // collective up
+    else if (keys.ShiftLeft||keys.ShiftRight) S.vy += (-9.5 - S.vy) * Math.min(1, dt * 2.5);  // dive
+    else S.vy += (-1.1 - S.vy) * Math.min(1, dt * 1.0);                                 // near-hover drift down
     S.y += S.vy * dt;
     if (S.y > 120) { S.y = 120; S.vy = Math.min(0, S.vy); }
     if (S.y < gY + 1.0) { S.y = gY + 1.0; S.vy = Math.max(0, S.vy); }
@@ -2236,7 +2252,7 @@ function physics(dt){
     if(S.barrelTime>0.6) bestTube=Math.max(bestTube,S.barrelTime);
     score += dt*(S.barreled?130:34);
     rideTime+=dt;
-    reefWorldFor(REEF,S.along, S.faceV, peel, wv.amp, S.pos); S.y=S.pos.y;
+    reefWorldFor(REEF,S.along, S.faceV, peel, wv.amp, S.pos, wv.adv||0); S.y=S.pos.y;
     S.vel.set(REEF.s.x*S.vAlong, 0, REEF.s.y*S.vAlong);
     if(rideTime>0.8) bestRide=Math.max(bestRide,rideTime);
     if(comboTimer>0){ comboTimer-=dt; if(comboTimer<=0){ combo=0; hideCombo(); } }
@@ -2479,7 +2495,7 @@ function updateCamera(dt){
     // outside chase view
     const ox=S.pos.x - REEF.s.x*9 + REEF.f.x*3.2, oy=S.y+2.8, oz=S.pos.z - REEF.s.y*9 + REEF.f.y*3.2;
     // inside-the-tube view: sit on the face behind the surfer, look out the almond
-    reefWorldFor(REEF, Math.max(4,S.along-13), 0.36, wv.peel, wv.amp, _bc);
+    reefWorldFor(REEF, Math.max(4,S.along-13), 0.36, wv.peel, wv.amp, _bc, wv.adv||0);
     const ix=_bc.x + REEF.f.x*0.6, iy=_bc.y+1.35, iz=_bc.z + REEF.f.y*0.6;
     camWanted.set(lerp(ox,ix,bm), lerp(oy,iy,bm), lerp(oz,iz,bm));
     camera.position.lerp(camWanted, 1-Math.pow(0.0004,dt));
@@ -2626,7 +2642,7 @@ function frame(now){ requestAnimationFrame(frame); let dt=(now-last)/1000; last=
   lbT+=dt; if(lbT>0.5){ lbT=0; updateLB(); }
   rpT+=dt; if(rpT>0.3){ rpT=0; updateRidePrompt(); }
   updateRT(dt);
-  if(running) drawRadar();
+  if(running && !document.body.classList.contains('radmin')) drawRadar();
   updateGulls(dt,waterTime); updatePod(dt,waterTime);
   spray.update(dt); mist.update(dt); updateRings(dt); wakeSurf.update(dt); wakeJet.update(dt);
   moodF+=((envName==='night'?1:0)-moodF)*Math.min(1,dt*0.8);
